@@ -263,12 +263,19 @@
             <artifactId>spring-boot-starter-data-ldap</artifactId>
         </dependency>
 
-        <!-- swagger 解析 -->
+        <!-- swagger2 解析 -->
         <dependency>
             <groupId>io.swagger</groupId>
             <artifactId>swagger-parser</artifactId>
             <version>1.0.51</version>
         </dependency>
+
+        <!-- swagger3 解析 -->
+        <!--<dependency>-->
+        <!--<groupId>io.swagger.parser.v3</groupId>-->
+        <!--<artifactId>swagger-parser</artifactId>-->
+        <!--<version>2.0.24</version>-->
+        <!--</dependency>-->
 
         <!-- 执行 js 代码依赖 -->
         <dependency>
@@ -365,6 +372,12 @@
             <groupId>org.apache.httpcomponents</groupId>
             <artifactId>httpclient</artifactId>
             <version>4.5.6</version>
+        </dependency>
+        <!-- 反射工具包 -->
+        <dependency>
+            <groupId>net.oneandone.reflections8</groupId>
+            <artifactId>reflections8</artifactId>
+            <version>0.11.7</version>
         </dependency>
     </dependencies>
 

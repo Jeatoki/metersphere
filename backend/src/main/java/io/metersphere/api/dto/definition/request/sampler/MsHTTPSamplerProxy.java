@@ -4,6 +4,7 @@ import com.alibaba.fastjson.JSONObject;
 import com.alibaba.fastjson.annotation.JSONField;
 import com.alibaba.fastjson.annotation.JSONType;
 import io.metersphere.api.dto.definition.request.MsTestElement;
+import io.metersphere.api.dto.definition.request.ParameterConfig;
 import io.metersphere.api.dto.definition.request.dns.MsDNSCacheManager;
 import io.metersphere.api.dto.scenario.Body;
 import io.metersphere.api.dto.scenario.KeyValue;
@@ -27,7 +28,11 @@ import org.apache.jorphan.collections.HashTree;
 
 import java.net.URL;
 import java.net.URLDecoder;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -35,52 +40,61 @@ import java.util.List;
 public class MsHTTPSamplerProxy extends MsTestElement {
     private String type = "HTTPSamplerProxy";
 
-    @JSONField(ordinal = 10)
+    @JSONField(ordinal = 20)
     private String protocol;
 
-    @JSONField(ordinal = 11)
+    @JSONField(ordinal = 21)
     private String domain;
 
-    @JSONField(ordinal = 12)
+    @JSONField(ordinal = 22)
     private String port;
 
-    @JSONField(ordinal = 13)
+    @JSONField(ordinal = 23)
     private String method;
 
-    @JSONField(ordinal = 14)
+    @JSONField(ordinal = 24)
     private String path;
 
-    @JSONField(ordinal = 15)
+    @JSONField(ordinal = 25)
     private String connectTimeout;
 
-    @JSONField(ordinal = 16)
+    @JSONField(ordinal = 26)
     private String responseTimeout;
 
-    @JSONField(ordinal = 17)
+    @JSONField(ordinal = 27)
     private List<KeyValue> headers;
 
-    @JSONField(ordinal = 18)
+    @JSONField(ordinal = 28)
     private Body body;
 
-    @JSONField(ordinal = 19)
+    @JSONField(ordinal = 29)
     private List<KeyValue> rest;
 
-    @JSONField(ordinal = 20)
+    @JSONField(ordinal = 30)
     private String url;
 
-    @JSONField(ordinal = 21)
+    @JSONField(ordinal = 31)
     private boolean followRedirects;
 
-    @JSONField(ordinal = 22)
+    @JSONField(ordinal = 32)
     private boolean doMultipartPost;
 
-    @JSONField(ordinal = 23)
+    @JSONField(ordinal = 33)
     private String useEnvironment;
 
-    @JSONField(ordinal = 24)
+    @JSONField(ordinal = 34)
     private List<KeyValue> arguments;
 
-    public void toHashTree(HashTree tree, List<MsTestElement> hashTree, EnvironmentConfig config) {
+    @JSONField(ordinal = 35)
+    private Object requestResult;
+
+    public void toHashTree(HashTree tree, List<MsTestElement> hashTree, ParameterConfig config) {
+        if (!this.isEnable()) {
+            return;
+        }
+        if (this.getReferenced() != null && this.getReferenced().equals("REF")) {
+            this.getRefElement(this);
+        }
         HTTPSamplerProxy sampler = new HTTPSamplerProxy();
         sampler.setEnabled(true);
         sampler.setName(this.getName());
@@ -96,23 +110,25 @@ public class MsHTTPSamplerProxy extends MsTestElement {
         if (useEnvironment != null) {
             ApiTestEnvironmentService environmentService = CommonBeanFactory.getBean(ApiTestEnvironmentService.class);
             ApiTestEnvironmentWithBLOBs environment = environmentService.get(useEnvironment);
-            config = JSONObject.parseObject(environment.getConfig(), EnvironmentConfig.class);
+            config.setConfig(JSONObject.parseObject(environment.getConfig(), EnvironmentConfig.class));
         }
         try {
-            if (config != null) {
+            if (config != null && config.getConfig() != null) {
                 String url = "";
-                sampler.setDomain(config.getHttpConfig().getDomain());
-                sampler.setPort(config.getHttpConfig().getPort());
-                sampler.setProtocol(config.getHttpConfig().getProtocol());
-                url = config.getHttpConfig().getProtocol() + "://" + config.getHttpConfig().getSocket();
+                sampler.setDomain(config.getConfig().getHttpConfig().getDomain());
+                sampler.setPort(config.getConfig().getHttpConfig().getPort());
+                sampler.setProtocol(config.getConfig().getHttpConfig().getProtocol());
+                url = config.getConfig().getHttpConfig().getProtocol() + "://" + config.getConfig().getHttpConfig().getSocket();
                 URL urlObject = new URL(url);
                 String envPath = StringUtils.equals(urlObject.getPath(), "/") ? "" : urlObject.getPath();
                 if (StringUtils.isNotBlank(this.getPath())) {
                     envPath += this.getPath();
                 }
                 if (CollectionUtils.isNotEmpty(this.getRest()) && this.isRest()) {
-                    sampler.setPath(getRestParameters(URLDecoder.decode(envPath, "UTF-8")));
-                } else {
+                    envPath = getRestParameters(URLDecoder.decode(envPath, "UTF-8"));
+                    sampler.setPath(envPath);
+                }
+                if (CollectionUtils.isNotEmpty(this.getArguments())) {
                     sampler.setPath(getPostQueryParameters(URLDecoder.decode(envPath, "UTF-8")));
                 }
             } else {
@@ -125,18 +141,24 @@ public class MsHTTPSamplerProxy extends MsTestElement {
                 sampler.setPort(urlObject.getPort());
                 sampler.setProtocol(urlObject.getProtocol());
 
-                sampler.setPath(getRestParameters(URLDecoder.decode(urlObject.getPath(), "UTF-8")));
-                sampler.setPath(getPostQueryParameters(URLDecoder.decode(urlObject.getPath(), "UTF-8")));
+                if (CollectionUtils.isNotEmpty(this.getRest()) && this.isRest()) {
+                    sampler.setPath(getRestParameters(URLDecoder.decode(urlObject.getPath(), "UTF-8")));
+                }
+                if (CollectionUtils.isNotEmpty(this.getArguments())) {
+                    sampler.setPath(getPostQueryParameters(URLDecoder.decode(urlObject.getPath(), "UTF-8")));
+                }
             }
         } catch (Exception e) {
             LogUtil.error(e);
         }
-
+        // REST参数
+        if (CollectionUtils.isNotEmpty(this.getArguments())) {
+            sampler.setArguments(httpArguments(this.getRest()));
+        }
         // 请求参数
         if (CollectionUtils.isNotEmpty(this.getArguments())) {
             sampler.setArguments(httpArguments(this.getArguments()));
         }
-
         // 请求体
         if (!StringUtils.equals(this.getMethod(), "GET")) {
             List<KeyValue> bodyParams = this.body.getBodyParams(sampler, this.getId());
@@ -148,9 +170,10 @@ public class MsHTTPSamplerProxy extends MsTestElement {
             setHeader(httpSamplerTree);
         }
         //判断是否要开启DNS
-        if (config != null && config.getCommonConfig() != null && config.getCommonConfig().isEnableHost()) {
-            MsDNSCacheManager.addEnvironmentVariables(httpSamplerTree, this.getName(), config);
-            MsDNSCacheManager.addEnvironmentDNS(httpSamplerTree, this.getName(), config);
+        if (config != null && config.getConfig() != null && config.getConfig().getCommonConfig() != null
+                && config.getConfig().getCommonConfig().isEnableHost()) {
+            MsDNSCacheManager.addEnvironmentVariables(httpSamplerTree, this.getName(), config.getConfig());
+            MsDNSCacheManager.addEnvironmentDNS(httpSamplerTree, this.getName(), config.getConfig());
         }
         if (CollectionUtils.isNotEmpty(hashTree)) {
             for (MsTestElement el : hashTree) {
@@ -163,10 +186,22 @@ public class MsHTTPSamplerProxy extends MsTestElement {
         StringBuffer stringBuffer = new StringBuffer();
         stringBuffer.append(path);
         stringBuffer.append("/");
+        Map<String, String> keyValueMap = new HashMap<>();
         this.getRest().stream().filter(KeyValue::isEnable).filter(KeyValue::isValid).forEach(keyValue ->
-                stringBuffer.append(keyValue.getValue()).append("/")
+                keyValueMap.put(keyValue.getName(), keyValue.getValue())
         );
-        return stringBuffer.substring(0, stringBuffer.length() - 1);
+
+        Pattern p = Pattern.compile("(\\{)([\\w]+)(\\})");
+        Matcher m = p.matcher(path);
+        StringBuffer sb = new StringBuffer();
+        while (m.find()) {
+            String group = m.group(2);
+            //替换并且把替换好的值放到sb中
+            m.appendReplacement(sb, keyValueMap.get(group));
+        }
+        //把符合的数据追加到sb尾
+        m.appendTail(sb);
+        return sb.toString();
     }
 
     private String getPostQueryParameters(String path) {
@@ -209,4 +244,5 @@ public class MsHTTPSamplerProxy extends MsTestElement {
     private boolean isRest() {
         return this.getRest().stream().filter(KeyValue::isEnable).filter(KeyValue::isValid).toArray().length > 0;
     }
+
 }

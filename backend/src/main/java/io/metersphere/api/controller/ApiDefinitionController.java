@@ -4,10 +4,10 @@ import com.github.pagehelper.Page;
 import com.github.pagehelper.PageHelper;
 import io.metersphere.api.dto.APIReportResult;
 import io.metersphere.api.dto.ApiTestImportRequest;
-import io.metersphere.api.dto.definition.ApiDefinitionRequest;
-import io.metersphere.api.dto.definition.ApiDefinitionResult;
-import io.metersphere.api.dto.definition.RunDefinitionRequest;
-import io.metersphere.api.dto.definition.SaveApiDefinitionRequest;
+import io.metersphere.api.dto.automation.ApiScenarioRequest;
+import io.metersphere.api.dto.automation.ReferenceDTO;
+import io.metersphere.api.dto.definition.*;
+import io.metersphere.api.dto.definition.parse.ApiDefinitionImport;
 import io.metersphere.api.service.ApiDefinitionService;
 import io.metersphere.base.domain.ApiDefinition;
 import io.metersphere.commons.constants.RoleConstants;
@@ -62,6 +62,10 @@ public class ApiDefinitionController {
         apiDefinitionService.removeToGc(ids);
     }
 
+    @PostMapping("/reduction")
+    public void reduction(@RequestBody List<String> ids) {
+        apiDefinitionService.reduction(ids);
+    }
 
     @GetMapping("/get/{id}")
     public ApiDefinition get(@PathVariable String id) {
@@ -90,9 +94,19 @@ public class ApiDefinitionController {
 
     @PostMapping(value = "/import", consumes = {"multipart/form-data"})
     @RequiresRoles(value = {RoleConstants.TEST_USER, RoleConstants.TEST_MANAGER}, logical = Logical.OR)
-    public String testCaseImport(@RequestPart(value = "file", required = false) MultipartFile file, @RequestPart("request") ApiTestImportRequest request) {
+    public ApiDefinitionImport testCaseImport(@RequestPart(value = "file", required = false) MultipartFile file, @RequestPart("request") ApiTestImportRequest request) {
         return apiDefinitionService.apiTestImport(file, request);
     }
 
+    @PostMapping("/getReference")
+    public ReferenceDTO getReference(@RequestBody ApiScenarioRequest request) {
+        return apiDefinitionService.getReference(request);
+    }
+
+    @PostMapping("/batch/edit")
+    @RequiresRoles(value = {RoleConstants.TEST_USER, RoleConstants.TEST_MANAGER}, logical = Logical.OR)
+    public void editApiBath(@RequestBody ApiBatchRequest request) {
+        apiDefinitionService.editApiBath(request);
+    }
 
 }

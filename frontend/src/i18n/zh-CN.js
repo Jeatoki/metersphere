@@ -1,5 +1,8 @@
 export default {
   commons: {
+    please_fill_in_the_template: '请填写模版内容',
+    cut_back_old_version: '切回旧版',
+    cut_back_new_version: '切回新版',
     comment: '评论',
     examples: '示例',
     help_documentation: '帮助文档',
@@ -121,6 +124,7 @@ export default {
     already_exists: '名称不能重复',
     modifier: '修改人',
     validate: "校验",
+    batch_add: "批量添加",
     date: {
       select_date: '选择日期',
       start_date: '开始日期',
@@ -163,7 +167,11 @@ export default {
         current_user: "是当前用户"
       }
     },
-    monitor: "监控"
+    monitor: "监控",
+    all_label: {
+      case: "全部用例",
+      review: "全部评审"
+    }
   },
   license: {
     title: '授权管理',
@@ -242,9 +250,8 @@ export default {
         '       2.机器人选择为群机器人，安全验证选择“自定义关键词” ："任务通知";\n' +
         '       3.选择接收人时必须是你所建的群里包含的人,接收人手机号为必填项且为钉钉企业所使用的手机号,',
       message: '事件，接收人，接收方式为必填项',
-      message_webhook: '接收方式为钉钉和企业机器人时，webhook为必填项'
-
-
+      message_webhook: '接收方式为钉钉和企业机器人时，webhook为必填项',
+      template: "模版"
     },
     integration: {
       select_defect_platform: '请选择要集成的缺陷管理平台：',
@@ -293,6 +300,7 @@ export default {
     tapd_id: 'TAPD项目ID',
     jira_key: 'JIRA项目key',
     zentao_id: 'Zentao项目ID',
+    manager: '项目管理',
   },
   member: {
     create: '添加成员',
@@ -485,6 +493,7 @@ export default {
       api_case_number: "用例数",
       api_case_status: "用例状态",
       api_case_passing_rate: "用例通过率",
+      create_tip: "注: 详细的接口信息可以在编辑页面填写",
       request: {
         grade_info: "按等级从高到低",
         run_env: "运行环境",
@@ -528,6 +537,12 @@ export default {
         post_script: "后置脚本",
         extract_param: "提取参数",
         add_module: "创建模块",
+        edit_api: "编辑接口",
+        test_plan_select: "请选择测试计划",
+        create_info: '创建',
+        update_info: '更新',
+        batch_edit: "批量编辑",
+        path_valid_info: "请求地址不能包含空格",
       }
     },
     automation: {
@@ -562,7 +577,11 @@ export default {
       execute: "执行",
       copy: "复制",
       remove: "删除",
-      batch_add_plan: "批量添加到测试计划",
+      view_ref: "查看引用",
+      case_ref: "用例引用",
+      scenario_ref: "场景引用",
+      plan_ref: "测试计划引用",
+      batch_add_plan: "添加到测试计划",
       batch_execute: "批量执行",
       scenario: {
         principal: "责任人",
@@ -570,7 +589,10 @@ export default {
         follow_people: "关注人",
         select_table: "选择可见数据",
         select_all: "选择全部数据"
-      }
+      },
+      report_name_info: '请输入报告名称',
+      save_case_info: '请先保存用例',
+      reference_deleted: '引用已删除',
     },
     environment: {
       name: "环境名称",
@@ -809,14 +831,14 @@ export default {
     not_exist: "测试报告不存在",
   },
   api_monitor: {
-    to:"至",
-    start_time:"开始日期",
-    end_time:"结束日期",
-    today:"今日",
-    this_week:"本周",
-    this_mouth:"本月",
-    please_search:"请搜索",
-    date:"日期"
+    to: "至",
+    start_time: "开始日期",
+    end_time: "结束日期",
+    today: "今日",
+    this_week: "本周",
+    this_mouth: "本月",
+    please_search: "请搜索",
+    date: "日期"
   },
   test_track: {
     test_track: "测试跟踪",
@@ -1125,6 +1147,7 @@ export default {
     home: '首页',
     definition: '接口定义',
     automation: '接口自动化',
+    report: '测试报告',
   },
   ldap: {
     url: 'LDAP地址',

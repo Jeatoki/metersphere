@@ -9,9 +9,9 @@
         <ms-sql-result-table v-if="isSqlType" :body="response.responseResult.body"/>
         <ms-code-edit v-if="!isSqlType" :mode="mode" :read-only="true" :modes="modes" :data.sync="response.responseResult.body" ref="codeEdit"/>
       </el-tab-pane>
-      <el-tab-pane label="Cookie" name="cookie" class="pane cookie">
-        <pre>{{response.cookies}}</pre>
-      </el-tab-pane>
+      <!--<el-tab-pane label="Cookie" name="cookie" class="pane cookie">-->
+        <!--<pre>{{response.cookies}}</pre>-->
+      <!--</el-tab-pane>-->
 
       <el-tab-pane :label="$t('api_test.definition.request.console')" name="console" class="pane">
         <pre>{{response.responseResult.console}}</pre>
@@ -25,6 +25,21 @@
         <pre>{{response.responseResult.vars}}</pre>
       </el-tab-pane>
 
+      <el-tab-pane :label="$t('api_report.request_body')" name="request_body" class="pane">
+        <div>
+          {{$t('api_test.request.address')}} : {{ response.url }}
+        </div>
+        <div>
+          {{$t('api_test.scenario.headers')}} : {{ response.headers }}
+        </div>
+        <div>
+          Cookies : {{response.cookies}}
+        </div>
+        <div>
+          Body : {{response.body}}
+        </div>
+
+      </el-tab-pane>
 
       <el-tab-pane v-if="activeName == 'body'" :disabled="true" name="mode" class="pane cookie">
         <template v-slot:label>
@@ -86,7 +101,7 @@
     },
     computed: {
       isSqlType() {
-        return (this.currentProtocol === "SQL" && this.response.responseResult.responseCode === '200' && this.mode ==='table');
+        return (this.currentProtocol === "SQL" && this.response.responseResult.responseCode === '200' && this.mode === 'table');
       }
     }
   }
@@ -118,6 +133,10 @@
 
   .text-container .pane.cookie {
     padding: 0;
+  }
+
+  /deep/ .el-tabs__nav-wrap::after {
+    height: 0px;
   }
 
   pre {

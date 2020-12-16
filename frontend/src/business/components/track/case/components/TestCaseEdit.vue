@@ -262,6 +262,8 @@ import {listenGoBack, removeGoBackListener} from "@/common/js/utils";
 import {LIST_CHANGE, TrackEvent} from "@/business/components/common/head/ListEvent";
 import {Message} from "element-ui";
 import TestCaseAttachment from "@/business/components/track/case/components/TestCaseAttachment";
+import {getCurrentProjectID} from "../../../../../common/js/utils";
+import {buildNodePath} from "../../../api/definition/model/NodeTree";
 
 export default {
   name: "TestCaseEdit",
@@ -269,6 +271,7 @@ export default {
   data() {
     return {
       result: {},
+      projectId: "",
       dialogFormVisible: false,
       form: {
         name: '',
@@ -329,9 +332,6 @@ export default {
     selectNode: {
       type: Object
     },
-    currentProject: {
-      type: Object
-    }
   },
   mounted() {
     this.getSelectOptions();
@@ -340,9 +340,6 @@ export default {
     treeNodes() {
       this.getModuleOptions();
     },
-    currentProject() {
-      this.getTestOptions();
-    }
   },
   methods: {
     reload() {
@@ -351,7 +348,7 @@ export default {
     },
     open(testCase) {
       this.resetForm();
-
+      this.projectId = getCurrentProjectID();
       if (window.history && window.history.pushState) {
         history.pushState(null, null, document.URL);
         window.addEventListener('popstate', this.close);
@@ -489,8 +486,8 @@ export default {
           param.nodePath = item.path;
         }
       });
-      if (this.currentProject) {
-        param.projectId = this.currentProject.id;
+      if (this.projectId) {
+        param.projectId = this.projectId;
       }
       param.name = param.name.trim();
       if (param.method != 'auto') {
@@ -551,7 +548,7 @@ export default {
     getModuleOptions() {
       let moduleOptions = [];
       this.treeNodes.forEach(node => {
-        this.buildNodePath(node, {path: ''}, moduleOptions);
+        buildNodePath(node, {path: ''}, moduleOptions);
       });
       this.moduleOptions = moduleOptions;
     },
@@ -563,8 +560,8 @@ export default {
     },
     getTestOptions() {
       this.testOptions = [];
-      if (this.currentProject && this.form.type != '' && this.form.type != 'functional') {
-        this.result = this.$get('/' + this.form.type + '/list/' + this.currentProject.id, response => {
+      if (this.projectId && this.form.type != '' && this.form.type != 'functional') {
+        this.result = this.$get('/' + this.form.type + '/list/' + this.projectId, response => {
           this.testOptions = response.data;
           this.testOptions.unshift({id: 'other', name: this.$t('test_track.case.other')})
         });
@@ -578,17 +575,7 @@ export default {
       this.getMaintainerOptions();
       this.getTestOptions();
     },
-    buildNodePath(node, option, moduleOptions) {
-      //递归构建节点路径
-      option.id = node.id;
-      option.path = option.path + '/' + node.name;
-      moduleOptions.push(option);
-      if (node.children) {
-        for (let i = 0; i < node.children.length; i++) {
-          this.buildNodePath(node.children[i], {path: option.path}, moduleOptions);
-        }
-      }
-    },
+
     resetForm() {
       //防止点击修改后，点击新建触发校验
       if (this.$refs['caseFrom']) {

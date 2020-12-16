@@ -1,5 +1,5 @@
 <template>
-  <el-dialog :close-on-click-modal="false" :title="$t('api_test.definition.request.title')" :visible.sync="visible"
+  <el-dialog :close-on-click-modal="false" :title="$t('api_test.automation.create_tag')" :visible.sync="visible"
              width="45%"
              :destroy-on-close="true">
     <el-form :model="tagForm" label-position="right" label-width="80px" size="small" :rules="rule" ref="tagForm">
@@ -9,18 +9,18 @@
             <el-input v-model="tagForm.name" autocomplete="off" :placeholder="$t('commons.name')"/>
           </el-col>
           <el-col :span="4">
-            <el-button @click="saveTag">{{$t('commons.save')}}</el-button>
+            <el-button style="margin-left: 20px" @click="saveTag">{{$t('commons.save')}}</el-button>
           </el-col>
         </el-row>
       </el-form-item>
     </el-form>
     <el-table :data="tagData" row-key="id">
 
-      <el-table-column prop="name" :label="$t('api_test.definition.api_name')" show-overflow-tooltip/>
+      <el-table-column prop="name" :label="$t('commons.name')" show-overflow-tooltip/>
       <el-table-column :label="$t('commons.operating')" min-width="130" align="center">
         <template v-slot:default="scope">
-          <el-button type="text" @click="editApi(scope.row)">编辑</el-button>
-          <el-button type="text" @click="handleDelete(scope.row)" style="color: #F56C6C">删除</el-button>
+          <el-button type="text" @click="editApi(scope.row)">{{$t('commons.edit')}}</el-button>
+          <el-button type="text" @click="handleDelete(scope.row)" style="color: #F56C6C">{{$t('commons.delete')}}</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -38,10 +38,9 @@
 
 <script>
   import {WORKSPACE_ID} from '@/common/js/constants';
-  import {getCurrentUser, getUUID} from "@/common/js/utils";
+  import {getCurrentUser, getUUID,getCurrentProjectID} from "@/common/js/utils";
   import MsDialogFooter from "@/business/components/common/components/MsDialogFooter";
   import MsTablePagination from "../../../common/pagination/TablePagination";
-
   export default {
     name: "MsAddTag",
     components: {MsDialogFooter,MsTablePagination},
@@ -73,7 +72,7 @@
     },
     methods: {
       saveTag() {
-        if (this.tagData.id != undefined && this.tagForm.id != null) {
+        if (this.tagForm.id != undefined && this.tagForm.id != null) {
           this.path = "/api/tag/update";
         } else {
           this.path = "/api/tag/create";
@@ -94,8 +93,8 @@
       setParameter() {
         this.tagForm.projectId = this.projectId;
       },
-      open(projectId) {
-        this.projectId = projectId;
+      open() {
+        this.projectId = getCurrentProjectID();
         this.visible = true;
         this.initTable();
       },

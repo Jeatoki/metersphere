@@ -3,7 +3,7 @@ package io.metersphere.api.dto.definition.request.processors.post;
 import com.alibaba.fastjson.annotation.JSONField;
 import com.alibaba.fastjson.annotation.JSONType;
 import io.metersphere.api.dto.definition.request.MsTestElement;
-import io.metersphere.api.dto.scenario.environment.EnvironmentConfig;
+import io.metersphere.api.dto.definition.request.ParameterConfig;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.apache.commons.collections.CollectionUtils;
@@ -20,14 +20,17 @@ import java.util.List;
 public class MsJSR223PostProcessor extends MsTestElement {
     private String type = "JSR223PostProcessor";
 
-    @JSONField(ordinal = 10)
+    @JSONField(ordinal = 20)
     private String script;
 
-    @JSONField(ordinal = 11)
+    @JSONField(ordinal = 21)
     private String scriptLanguage;
 
 
-    public void toHashTree(HashTree tree, List<MsTestElement> hashTree, EnvironmentConfig config) {
+    public void toHashTree(HashTree tree, List<MsTestElement> hashTree, ParameterConfig config) {
+        if (!this.isEnable()) {
+            return;
+        }
         JSR223PostProcessor processor = new JSR223PostProcessor();
         processor.setEnabled(true);
         processor.setName(this.getName() + "JSR223PostProcessor");

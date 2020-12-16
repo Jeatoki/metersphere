@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS `api_module` (
     `protocol`               varchar(64) NOT NULL COMMENT 'Node protocol',
     `parent_id`              varchar(50) DEFAULT NULL COMMENT 'Parent node ID',
     `level`                  int(10)  DEFAULT 1 COMMENT 'Node level',
+    `pos`                    double DEFAULT NULL COMMENT 'Node order',
     `create_time`            bigint(13)  NOT NULL COMMENT 'Create timestamp',
     `update_time`            bigint(13)  NOT NULL COMMENT 'Update timestamp',
     PRIMARY KEY (`id`)
@@ -18,7 +19,7 @@ CREATE TABLE IF NOT EXISTS `api_definition` (
     `name` varchar(255)  NOT NULL COMMENT 'Test name',
     `method` varchar(64)  NOT NULL COMMENT 'method',
     `protocol` varchar(255)  NOT NULL COMMENT 'request protocol',
-    `path` varchar(255)  DEFAULT NULL COMMENT 'request path',
+    `path` varchar(1000)  DEFAULT NULL COMMENT 'request path',
     `module_path` varchar(1000)  COMMENT 'module path',
     `description` varchar(255)  DEFAULT NULL COMMENT 'Test description',
     `environment_id` varchar(50)  DEFAULT NULL COMMENT 'environment id',

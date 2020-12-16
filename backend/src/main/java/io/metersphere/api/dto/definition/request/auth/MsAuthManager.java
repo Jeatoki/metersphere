@@ -4,6 +4,7 @@ import com.alibaba.fastjson.JSONObject;
 import com.alibaba.fastjson.annotation.JSONField;
 import com.alibaba.fastjson.annotation.JSONType;
 import io.metersphere.api.dto.definition.request.MsTestElement;
+import io.metersphere.api.dto.definition.request.ParameterConfig;
 import io.metersphere.api.dto.scenario.environment.EnvironmentConfig;
 import io.metersphere.api.service.ApiTestEnvironmentService;
 import io.metersphere.base.domain.ApiTestEnvironmentWithBLOBs;
@@ -23,34 +24,37 @@ import java.util.List;
 @JSONType(typeName = "AuthManager")
 public class MsAuthManager extends MsTestElement {
     private String type = "AuthManager";
-    @JSONField(ordinal = 10)
+    @JSONField(ordinal = 20)
     private String username;
 
-    @JSONField(ordinal = 11)
+    @JSONField(ordinal = 21)
     private String password;
 
-    @JSONField(ordinal = 12)
+    @JSONField(ordinal = 22)
     private String url;
 
-    @JSONField(ordinal = 13)
+    @JSONField(ordinal = 23)
     private String realm;
 
-    @JSONField(ordinal = 14)
+    @JSONField(ordinal = 24)
     private String verification;
 
-    @JSONField(ordinal = 15)
+    @JSONField(ordinal = 25)
     private String mechanism;
 
-    @JSONField(ordinal = 16)
+    @JSONField(ordinal = 26)
     private String encrypt;
 
-    @JSONField(ordinal = 17)
+    @JSONField(ordinal = 27)
     private String domain;
 
-    @JSONField(ordinal = 18)
+    @JSONField(ordinal = 28)
     private String environment;
 
-    public void toHashTree(HashTree tree, List<MsTestElement> hashTree, EnvironmentConfig config) {
+    public void toHashTree(HashTree tree, List<MsTestElement> hashTree, ParameterConfig config) {
+        if (!this.isEnable()) {
+            return;
+        }
         AuthManager authManager = new AuthManager();
         authManager.setEnabled(true);
         authManager.setName(this.getUsername() + "AuthManager");
@@ -63,8 +67,8 @@ public class MsAuthManager extends MsTestElement {
             if (environment != null) {
                 ApiTestEnvironmentService environmentService = CommonBeanFactory.getBean(ApiTestEnvironmentService.class);
                 ApiTestEnvironmentWithBLOBs environmentWithBLOBs = environmentService.get(environment);
-                config = JSONObject.parseObject(environmentWithBLOBs.getConfig(), EnvironmentConfig.class);
-                this.url = config.getHttpConfig().getProtocol() + "://" + config.getHttpConfig().getSocket();
+                EnvironmentConfig envConfig = JSONObject.parseObject(environmentWithBLOBs.getConfig(), EnvironmentConfig.class);
+                this.url = envConfig.getHttpConfig().getProtocol() + "://" + envConfig.getHttpConfig().getSocket();
             }
         }
         auth.setDomain(this.domain);

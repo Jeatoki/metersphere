@@ -3,9 +3,9 @@ package io.metersphere.api.dto.definition.request.sampler;
 import com.alibaba.fastjson.annotation.JSONField;
 import com.alibaba.fastjson.annotation.JSONType;
 import io.metersphere.api.dto.definition.request.MsTestElement;
+import io.metersphere.api.dto.definition.request.ParameterConfig;
 import io.metersphere.api.dto.scenario.DatabaseConfig;
 import io.metersphere.api.dto.scenario.KeyValue;
-import io.metersphere.api.dto.scenario.environment.EnvironmentConfig;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.apache.commons.collections.CollectionUtils;
@@ -24,22 +24,30 @@ import java.util.List;
 public class MsJDBCSampler extends MsTestElement {
     // type 必须放最前面，以便能够转换正确的类
     private String type = "JDBCSampler";
-    @JSONField(ordinal = 10)
+    @JSONField(ordinal = 20)
     private DatabaseConfig dataSource;
-    @JSONField(ordinal = 11)
+    @JSONField(ordinal = 21)
     private String query;
-    @JSONField(ordinal = 12)
+    @JSONField(ordinal = 22)
     private long queryTimeout;
-    @JSONField(ordinal = 13)
+    @JSONField(ordinal = 23)
     private String resultVariable;
-    @JSONField(ordinal = 14)
+    @JSONField(ordinal = 24)
     private String variableNames;
-    @JSONField(ordinal = 15)
+    @JSONField(ordinal = 25)
     private List<KeyValue> variables;
-    @JSONField(ordinal = 16)
+    @JSONField(ordinal = 26)
     private String environmentId;
+    @JSONField(ordinal = 27)
+    private Object requestResult;
 
-    public void toHashTree(HashTree tree, List<MsTestElement> hashTree, EnvironmentConfig config) {
+    public void toHashTree(HashTree tree, List<MsTestElement> hashTree, ParameterConfig config) {
+        if (!this.isEnable()) {
+            return;
+        }
+        if (this.getReferenced() != null && this.getReferenced().equals("REF")) {
+            this.getRefElement(this);
+        }
         final HashTree samplerHashTree = tree.add(jdbcSampler());
         tree.add(jdbcDataSource());
         tree.add(arguments(this.getName() + " Variables", this.getVariables()));

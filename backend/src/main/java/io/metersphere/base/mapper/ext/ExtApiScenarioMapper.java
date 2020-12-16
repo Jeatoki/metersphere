@@ -14,4 +14,9 @@ public interface ExtApiScenarioMapper {
 
     List<ApiScenario> selectIds(@Param("ids") List<String> ids);
 
+    List<ApiScenario> selectReference(@Param("request") ApiScenarioRequest request);
+
+    int removeToGc(@Param("ids") List<String> ids);
+
+    int reduction(@Param("ids") List<String> ids);
 }

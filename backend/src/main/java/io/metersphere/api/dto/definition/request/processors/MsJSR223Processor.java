@@ -3,7 +3,7 @@ package io.metersphere.api.dto.definition.request.processors;
 import com.alibaba.fastjson.annotation.JSONField;
 import com.alibaba.fastjson.annotation.JSONType;
 import io.metersphere.api.dto.definition.request.MsTestElement;
-import io.metersphere.api.dto.scenario.environment.EnvironmentConfig;
+import io.metersphere.api.dto.definition.request.ParameterConfig;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.apache.commons.collections.CollectionUtils;
@@ -20,13 +20,16 @@ import java.util.List;
 public class MsJSR223Processor extends MsTestElement {
     private String type = "JSR223Processor";
 
-    @JSONField(ordinal = 10)
+    @JSONField(ordinal = 20)
     private String script;
 
-    @JSONField(ordinal = 11)
+    @JSONField(ordinal = 21)
     private String scriptLanguage;
 
-    public void toHashTree(HashTree tree, List<MsTestElement> hashTree, EnvironmentConfig config) {
+    public void toHashTree(HashTree tree, List<MsTestElement> hashTree, ParameterConfig config) {
+        if (!this.isEnable()) {
+            return;
+        }
         JSR223Sampler processor = new JSR223Sampler();
         processor.setEnabled(true);
         processor.setName(this.getName() + "JSR223Processor");

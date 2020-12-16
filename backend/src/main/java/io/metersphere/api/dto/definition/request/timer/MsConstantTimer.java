@@ -3,7 +3,7 @@ package io.metersphere.api.dto.definition.request.timer;
 import com.alibaba.fastjson.annotation.JSONField;
 import com.alibaba.fastjson.annotation.JSONType;
 import io.metersphere.api.dto.definition.request.MsTestElement;
-import io.metersphere.api.dto.scenario.environment.EnvironmentConfig;
+import io.metersphere.api.dto.definition.request.ParameterConfig;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.apache.commons.collections.CollectionUtils;
@@ -19,14 +19,15 @@ import java.util.List;
 @JSONType(typeName = "ConstantTimer")
 public class MsConstantTimer extends MsTestElement {
     private String type = "ConstantTimer";
-    @JSONField(ordinal = 10)
+    @JSONField(ordinal = 20)
     private String id;
-    @JSONField(ordinal = 11)
-    private boolean enable = true;
-    @JSONField(ordinal = 12)
+    @JSONField(ordinal = 21)
     private String delay;
 
-    public void toHashTree(HashTree tree, List<MsTestElement> hashTree, EnvironmentConfig config) {
+    public void toHashTree(HashTree tree, List<MsTestElement> hashTree, ParameterConfig config) {
+        if (!this.isEnable()) {
+            return;
+        }
         final HashTree groupTree = tree.add(constantTimer());
         if (CollectionUtils.isNotEmpty(hashTree)) {
             hashTree.forEach(el -> {

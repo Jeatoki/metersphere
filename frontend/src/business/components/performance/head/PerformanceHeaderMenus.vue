@@ -1,21 +1,12 @@
 <template>
   <div id="menu-bar">
     <el-row type="flex">
-      <el-col :span="8">
+      <project-change :project-name="currentProject"/>
+      <el-col :span="12">
         <el-menu class="header-menu" :unique-opened="true" mode="horizontal" router :default-active='$route.path'>
           <el-menu-item :index="'/performance/home'">
             {{ $t("i18n.home") }}
           </el-menu-item>
-
-          <el-submenu v-permission="['test_manager','test_user','test_viewer']"
-                      index="3" popper-class="submenu">
-            <template v-slot:title>{{ $t('commons.project') }}</template>
-            <ms-recent-list ref="projectRecent" :options="projectRecent"/>
-            <el-divider/>
-            <ms-show-all :index="'/performance/project/all'"/>
-            <ms-create-button v-permission="['test_manager','test_user']" :index="'/performance/project/create'"
-                              :title="$t('project.create')"/>
-          </el-submenu>
 
           <el-submenu v-permission="['test_manager','test_user','test_viewer']"
                       index="4" popper-class="submenu">
@@ -36,12 +27,12 @@
           </el-submenu>
         </el-menu>
       </el-col>
-      <el-col :span="8">
+      <el-col :span="4" >
         <el-row type="flex" justify="center">
           <ms-create-test :to="'/performance/test/create'"/>
         </el-row>
       </el-col>
-      <el-col :span="8"/>
+      <el-col :span="10"/>
     </el-row>
   </div>
 </template>
@@ -53,10 +44,14 @@ import MsRecentList from "../../common/head/RecentList";
 import MsCreateButton from "../../common/head/CreateButton";
 import MsShowAll from "../../common/head/ShowAll";
 import {LIST_CHANGE, PerformanceEvent} from "@/business/components/common/head/ListEvent";
+import SearchList from "@/business/components/common/head/SearchList";
+import ProjectChange from "@/business/components/common/head/ProjectSwitch";
 
 export default {
   name: "PerformanceHeaderMenus",
   components: {
+    ProjectChange,
+    SearchList,
     MsCreateButton,
     MsShowAll,
     MsRecentList,
@@ -92,17 +87,18 @@ export default {
         },
         router(item) {
         }
-      }
+      },
+      currentProject: ''
     }
   },
   methods: {
     registerEvents() {
       PerformanceEvent.$on(LIST_CHANGE, () => {
-        // todo 这里偶尔会有 refs 为空的情况
-        if (!this.$refs.projectRecent) {
-          return;
-        }
-        this.$refs.projectRecent.recent();
+        // // todo 这里偶尔会有 refs 为空的情况
+        // if (!this.$refs.projectRecent) {
+        //   return;
+        // }
+        // this.$refs.projectRecent.recent();
         this.$refs.testRecent.recent();
         this.$refs.reportRecent.recent();
       });

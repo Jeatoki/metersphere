@@ -1,5 +1,8 @@
 export default {
   commons: {
+    please_fill_in_the_template: '請填寫模版內容',
+    cut_back_old_version: '切回舊版',
+    cut_back_new_version: '切回新版',
     comment: '評論',
     examples: '示例',
     help_documentation: '幫助文檔',
@@ -121,6 +124,7 @@ export default {
     already_exists: '名稱不能重復',
     modifier: '修改人',
     validate: "校驗",
+    batch_add: "批量添加",
     date: {
       select_date: '選擇日期',
       start_date: '開始日期',
@@ -163,7 +167,11 @@ export default {
         current_user: "是當前用戶"
       }
     },
-    monitor:"監控"
+    monitor: "監控",
+    all_label: {
+      case: "全部用例",
+      review: "全部評審"
+    }
   },
   license: {
     title: '授權管理',
@@ -242,9 +250,8 @@ export default {
         '         2.接收方式除郵件外webhook為必填；\n' +
         '         3.機器人選擇為群機器人，安全驗證選擇“自定義關鍵詞” ："任務通知"',
       message: '事件，接收人，接收方式為必填項',
-      message_webhook: '接收方式為釘釘和企業機器人時，webhook為必填項'
-
-
+      message_webhook: '接收方式為釘釘和企業機器人時，webhook為必填項',
+      template: "模版"
     },
     integration: {
       select_defect_platform: '請選擇要集成的缺陷管理平臺：',
@@ -293,6 +300,7 @@ export default {
     tapd_id: 'TAPD項目ID',
     jira_key: 'JIRA項目key',
     zentao_id: 'Zentao項目ID',
+    manager: '項目管理',
   },
   member: {
     create: '添加成員',
@@ -485,6 +493,7 @@ export default {
       api_case_number: "用例數",
       api_case_status: "用例狀態",
       api_case_passing_rate: "用例通過率",
+      create_tip: "註: 詳細的接口信息可以在編輯頁面填寫",
       request: {
         grade_info: "按等級從高到低",
         run_env: "運行環境",
@@ -528,6 +537,12 @@ export default {
         post_script: "後置腳本",
         extract_param: "提取參數",
         add_module: "創建模塊",
+        edit_api: "编辑接口",
+        test_plan_select: "請選擇測試計劃",
+        create_info: '創建',
+        update_info: '更新',
+        batch_edit: "批量編輯",
+        path_valid_info: "請求地址不能包含空格",
       }
     },
     automation: {
@@ -541,10 +556,43 @@ export default {
       wait_controller: "等待控制器",
       if_controller: "條件控制器",
       scenario_import: "場景導入",
-      customize_script: "自定義腳本",
+      customize_script: "自定義脚本",
       customize_req: "自定義請求",
-      reference_info: "請選擇接口或用例"
-
+      reference_info: "請選擇接口或用例",
+      scenario_test: "場景",
+      add_scenario: "创建場景",
+      scenario_name: "場景名称",
+      case_level: "用例等级",
+      tag: "標簽",
+      creator: "創建人",
+      update_time: "最後更新時間",
+      step: "步驟數",
+      last_result: "最後結果",
+      passing_rate: "通過率",
+      success: "通過",
+      fail: "失敗",
+      saved: "保存",
+      trash: "回收",
+      edit: "編輯",
+      execute: "執行",
+      copy: "復制",
+      remove: "删除",
+      view_ref: "查看引用",
+      case_ref: "用例引用",
+      scenario_ref: "场景引用",
+      plan_ref: "测试计划引用",
+      batch_add_plan: "添加到测试计划",
+      batch_execute: "批量执行",
+      scenario: {
+        principal: "責任人",
+        select_principal: "請選擇責任人",
+        follow_people: "關註人",
+        select_table: "選擇可見數據",
+        select_all: "選擇全部數據"
+      },
+      report_name_info: '請輸入報告名稱',
+      save_case_info: '請先保存用例',
+      reference_deleted: '引用已删除',
     },
     environment: {
       name: "環境名稱",
@@ -782,14 +830,14 @@ export default {
     not_exist: "測試報告不存在",
   },
   api_monitor: {
-    to:"到",
-    start_time:"開始時間",
-    end_time:"結束時間",
-    today:"今天",
-    this_week:"本週",
-    this_mouth:"本月",
-    please_search:"請搜索",
-    date:"日期"
+    to: "到",
+    start_time: "開始時間",
+    end_time: "結束時間",
+    today: "今天",
+    this_week: "本週",
+    this_mouth: "本月",
+    please_search: "請搜索",
+    date: "日期"
   },
   test_track: {
     test_track: "測試跟蹤",
@@ -1098,6 +1146,7 @@ export default {
     home: '首頁',
     definition: '接口定義',
     automation: '接口自動化',
+    report: '測試報告',
   },
   ldap: {
     url: 'LDAP地址',
