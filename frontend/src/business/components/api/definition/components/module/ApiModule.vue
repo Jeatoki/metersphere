@@ -4,7 +4,7 @@
     <ms-node-tree
       v-loading="result.loading"
       :tree-nodes="data"
-      :type="'edit'"
+      :type="isReadOnly ? 'view' : 'edit'"
       @add="add"
       @edit="edit"
       @drag="drag"
@@ -13,13 +13,14 @@
       ref="nodeTree">
 
       <template v-slot:header>
-       <api-module-header
-         :condition="condition"
-         :current-module="currentModule"
-         @exportAPI="exportAPI"
-         @saveAsEdit="saveAsEdit"
-         @refresh="refresh"
-         @debug="debug"/>
+        <api-module-header
+          :condition="condition"
+          :current-module="currentModule"
+          :is-read-only="isReadOnly"
+          @exportAPI="exportAPI"
+          @saveAsEdit="saveAsEdit"
+          @refresh="refresh"
+          @debug="debug"/>
       </template>
 
     </ms-node-tree>
@@ -58,6 +59,14 @@
         projectId: "",
         data: [],
         currentModule: {},
+      }
+    },
+    props: {
+      isReadOnly: {
+        type: Boolean,
+        default() {
+          return false
+        }
       }
     },
     mounted() {
@@ -148,6 +157,7 @@
         this.$emit('saveAsEdit', data);
       },
       refresh() {
+        this.list();
         this.$emit("refreshTable");
       },
     }

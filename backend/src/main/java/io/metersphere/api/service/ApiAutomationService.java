@@ -6,8 +6,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
-import io.metersphere.api.dto.APIReportResult;
 import io.metersphere.api.dto.automation.*;
+import io.metersphere.api.dto.datacount.ApiDataCountResult;
 import io.metersphere.api.dto.definition.RunDefinitionRequest;
 import io.metersphere.api.dto.definition.request.*;
 import io.metersphere.api.dto.scenario.KeyValue;
@@ -22,6 +22,7 @@ import io.metersphere.commons.constants.APITestStatus;
 import io.metersphere.commons.constants.ApiRunMode;
 import io.metersphere.commons.constants.ReportTriggerMode;
 import io.metersphere.commons.exception.MSException;
+import io.metersphere.commons.utils.DateUtils;
 import io.metersphere.commons.utils.ServiceUtils;
 import io.metersphere.commons.utils.SessionUtils;
 import io.metersphere.i18n.Translator;
@@ -100,11 +101,12 @@ public class ApiAutomationService {
         apiScenarioMapper.deleteByExample(example);
     }
 
-    public void create(SaveApiScenarioRequest request, List<MultipartFile> bodyFiles) {
+    public ApiScenario create(SaveApiScenarioRequest request, List<MultipartFile> bodyFiles) {
+        request.setId(UUID.randomUUID().toString());
         checkNameExist(request);
 
-        final ApiScenario scenario = new ApiScenario();
-        scenario.setId(UUID.randomUUID().toString());
+        final ApiScenarioWithBLOBs scenario = new ApiScenarioWithBLOBs();
+        scenario.setId(request.getId());
         scenario.setName(request.getName());
         scenario.setProjectId(request.getProjectId());
         scenario.setTagId(request.getTagId());
@@ -132,6 +134,7 @@ public class ApiAutomationService {
 
         List<String> bodyUploadIds = request.getBodyUploadIds();
         apiDefinitionService.createBodyFiles(bodyUploadIds, bodyFiles);
+        return scenario;
     }
 
     public void update(SaveApiScenarioRequest request, List<MultipartFile> bodyFiles) {
@@ -139,7 +142,7 @@ public class ApiAutomationService {
         List<String> bodyUploadIds = request.getBodyUploadIds();
         apiDefinitionService.createBodyFiles(bodyUploadIds, bodyFiles);
 
-        final ApiScenario scenario = new ApiScenario();
+        final ApiScenarioWithBLOBs scenario = new ApiScenarioWithBLOBs();
         scenario.setId(request.getId());
         scenario.setName(request.getName());
         scenario.setProjectId(request.getProjectId());
@@ -176,7 +179,12 @@ public class ApiAutomationService {
         extApiScenarioMapper.removeToGc(apiIds);
     }
 
-    public void reduction(List<String> apiIds) {
+    public void reduction(List<SaveApiScenarioRequest> requests) {
+        List<String> apiIds = new ArrayList<>();
+        requests.forEach(item -> {
+            checkNameExist(item);
+            apiIds.add(item.getId());
+        });
         extApiScenarioMapper.reduction(apiIds);
     }
 
@@ -188,11 +196,11 @@ public class ApiAutomationService {
         }
     }
 
-    public ApiScenario getApiScenario(String id) {
+    public ApiScenarioWithBLOBs getApiScenario(String id) {
         return apiScenarioMapper.selectByPrimaryKey(id);
     }
 
-    public List<ApiScenario> getApiScenarios(List<String> ids) {
+    public List<ApiScenarioWithBLOBs> getApiScenarios(List<String> ids) {
         if (CollectionUtils.isNotEmpty(ids)) {
             return extApiScenarioMapper.selectIds(ids);
         }
@@ -200,7 +208,7 @@ public class ApiAutomationService {
     }
 
     public void deleteTag(String id) {
-        List<ApiScenario> list = extApiScenarioMapper.selectByTagId(id);
+        List<ApiScenarioWithBLOBs> list = extApiScenarioMapper.selectByTagId(id);
         if (!list.isEmpty()) {
             Gson gs = new Gson();
             list.forEach(item -> {
@@ -212,17 +220,17 @@ public class ApiAutomationService {
         }
     }
 
-    private void createAPIReportResult(String id, String triggerMode) {
-        APIReportResult report = new APIReportResult();
+    private void createAPIScenarioReportResult(String id, String triggerMode, String execType, String projectId) {
+        APIScenarioReportResult report = new APIScenarioReportResult();
         report.setId(id);
-        report.setTestId(id);
-        report.setName("");
-        report.setTriggerMode(null);
+        report.setName("测试执行结果");
         report.setCreateTime(System.currentTimeMillis());
         report.setUpdateTime(System.currentTimeMillis());
         report.setStatus(APITestStatus.Running.name());
         report.setUserId(SessionUtils.getUserId());
         report.setTriggerMode(triggerMode);
+        report.setExecuteType(execType);
+        report.setProjectId(projectId);
         apiReportService.addResult(report);
 
     }
@@ -234,11 +242,11 @@ public class ApiAutomationService {
      * @return
      */
     public String run(RunScenarioRequest request) {
-        List<ApiScenario> apiScenarios = extApiScenarioMapper.selectIds(request.getScenarioIds());
+        List<ApiScenarioWithBLOBs> apiScenarios = extApiScenarioMapper.selectIds(request.getScenarioIds());
         MsTestPlan testPlan = new MsTestPlan();
         testPlan.setHashTree(new LinkedList<>());
         HashTree jmeterTestPlanHashTree = new ListedHashTree();
-        for (ApiScenario item : apiScenarios) {
+        for (ApiScenarioWithBLOBs item : apiScenarios) {
             MsThreadGroup group = new MsThreadGroup();
             group.setLabel(item.getName());
             group.setName(item.getName());
@@ -248,7 +256,7 @@ public class ApiAutomationService {
                 JSONObject element = JSON.parseObject(item.getScenarioDefinition());
                 MsScenario scenario = JSONObject.parseObject(item.getScenarioDefinition(), MsScenario.class);
                 // 多态JSON普通转换会丢失内容，需要通过 ObjectMapper 获取
-                if (element!= null && StringUtils.isNotEmpty(element.getString("hashTree"))) {
+                if (element != null && StringUtils.isNotEmpty(element.getString("hashTree"))) {
                     LinkedList<MsTestElement> elements = mapper.readValue(element.getString("hashTree"),
                             new TypeReference<LinkedList<MsTestElement>>() {
                             });
@@ -272,7 +280,8 @@ public class ApiAutomationService {
         // 调用执行方法
         jMeterService.runDefinition(request.getId(), jmeterTestPlanHashTree, request.getReportId(), ApiRunMode.SCENARIO.name());
 
-        createAPIReportResult(request.getId(), request.getTriggerMode() == null ? ReportTriggerMode.API.name() : request.getTriggerMode());
+        createAPIScenarioReportResult(request.getId(), request.getTriggerMode() == null ? ReportTriggerMode.MANUAL.name() : request.getTriggerMode(),
+                request.getExecuteType(), request.getProjectId());
         return request.getId();
     }
 
@@ -295,9 +304,10 @@ public class ApiAutomationService {
         ParameterConfig config = new ParameterConfig();
         config.setConfig(envConfig);
         HashTree hashTree = request.getTestElement().generateHashTree(config);
+        request.getTestElement().getJmx(hashTree);
         // 调用执行方法
         jMeterService.runDefinition(request.getId(), hashTree, request.getReportId(), ApiRunMode.SCENARIO.name());
-        createAPIReportResult(request.getId(), ReportTriggerMode.MANUAL.name());
+        createAPIScenarioReportResult(request.getId(), ReportTriggerMode.MANUAL.name(), request.getExecuteType(), request.getProjectId());
         return request.getId();
     }
 
@@ -353,4 +363,24 @@ public class ApiAutomationService {
         return "success";
     }
 
+    public long countScenarioByProjectID(String projectId) {
+        return extApiScenarioMapper.countByProjectID(projectId);
+    }
+
+    public long countScenarioByProjectIDAndCreatInThisWeek(String projectId) {
+        Map<String, Date> startAndEndDateInWeek = DateUtils.getWeedFirstTimeAndLastTime(new Date());
+
+        Date firstTime = startAndEndDateInWeek.get("firstTime");
+        Date lastTime = startAndEndDateInWeek.get("lastTime");
+
+        if (firstTime == null || lastTime == null) {
+            return 0;
+        } else {
+            return extApiScenarioMapper.countByProjectIDAndCreatInThisWeek(projectId, firstTime.getTime(), lastTime.getTime());
+        }
+    }
+
+    public List<ApiDataCountResult> countRunResultByProjectID(String projectId) {
+        return extApiScenarioMapper.countRunResultByProjectID(projectId);
+    }
 }

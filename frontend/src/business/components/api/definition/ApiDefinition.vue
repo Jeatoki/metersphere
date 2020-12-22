@@ -35,13 +35,28 @@
                      :name="item.name">
           <!-- 列表集合 -->
           <ms-api-list
-            v-if="item.type === 'list'"
+            v-if="item.type === 'list' && isApiListEnable"
             :current-protocol="currentProtocol"
             :visible="visible"
             :currentRow="currentRow"
             :select-node-ids="selectNodeIds"
             :trash-enable="trashEnable"
+            :is-api-list-enable="isApiListEnable"
             @editApi="editApi"
+            @handleCase="handleCase"
+            @showExecResult="showExecResult"
+            @isApiListEnableChange="isApiListEnableChange"
+            ref="apiList"/>
+          <!--测试用例列表-->
+          <api-case-simple-list
+            v-if="item.type === 'list' && !isApiListEnable"
+            :current-protocol="currentProtocol"
+            :visible="visible"
+            :currentRow="currentRow"
+            :select-node-ids="selectNodeIds"
+            :trash-enable="trashEnable"
+            :is-api-list-enable="isApiListEnable"
+            @isApiListEnableChange="isApiListEnableChange"
             @handleCase="handleCase"
             @showExecResult="showExecResult"
             ref="apiList"/>
@@ -63,10 +78,10 @@
 
           <!-- 测试-->
           <div v-else-if="item.type=== 'TEST'" class="ms-api-div">
-            <ms-run-test-http-page :currentProtocol="currentProtocol" :api-data="runTestData" @saveAsApi="editApi" v-if="currentProtocol==='HTTP'"/>
-            <ms-run-test-tcp-page :currentProtocol="currentProtocol" :api-data="runTestData" @saveAsApi="editApi" v-if="currentProtocol==='TCP'"/>
-            <ms-run-test-sql-page :currentProtocol="currentProtocol" :api-data="runTestData" @saveAsApi="editApi" v-if="currentProtocol==='SQL'"/>
-            <ms-run-test-dubbo-page :currentProtocol="currentProtocol" :api-data="runTestData" @saveAsApi="editApi" v-if="currentProtocol==='DUBBO'"/>
+            <ms-run-test-http-page :currentProtocol="currentProtocol" :api-data="item.api" @saveAsApi="editApi" v-if="currentProtocol==='HTTP'"/>
+            <ms-run-test-tcp-page :currentProtocol="currentProtocol" :api-data="item.api" @saveAsApi="editApi" v-if="currentProtocol==='TCP'"/>
+            <ms-run-test-sql-page :currentProtocol="currentProtocol" :api-data="item.api" @saveAsApi="editApi" v-if="currentProtocol==='SQL'"/>
+            <ms-run-test-dubbo-page :currentProtocol="currentProtocol" :api-data="item.api" @saveAsApi="editApi" v-if="currentProtocol==='DUBBO'"/>
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -74,7 +89,7 @@
   </ms-container>
 </template>
 <script>
-  import MsApiList from './components/ApiList';
+  import MsApiList from './components/list/ApiList';
   import MsContainer from "../../common/components/MsContainer";
   import MsMainContainer from "../../common/components/MsMainContainer";
   import MsAsideContainer from "../../common/components/MsAsideContainer";
@@ -90,10 +105,12 @@
   import MsRunTestDubboPage from "./components/runtest/RunTestDubboPage";
   import {downloadFile, getCurrentUser, getUUID, getCurrentProjectID} from "@/common/js/utils";
   import MsApiModule from "./components/module/ApiModule";
+  import ApiCaseSimpleList from "./components/list/ApiCaseSimpleList";
 
   export default {
     name: "ApiDefinition",
     components: {
+      ApiCaseSimpleList,
       MsApiModule,
       MsApiList,
       MsMainContainer,
@@ -127,7 +144,6 @@
         selectNodeIds: [],
         currentApi: {},
         moduleOptions: {},
-        runTestData: {},
         trashEnable: false,
         apiTabs: [{
           title: this.$t('api_test.definition.api_title'),
@@ -135,6 +151,7 @@
           type: "list",
           closable: false
         }],
+        isApiListEnable: true
       }
     },
     watch: {
@@ -143,6 +160,9 @@
       }
     },
     methods: {
+      isApiListEnableChange(data) {
+        this.isApiListEnable = data;
+      },
       handleCommand(e) {
         switch (e) {
           case "ADD":
@@ -229,7 +249,7 @@
         downloadFile("导出API.json", JSON.stringify(obj));
       },
       refresh(data) {
-        this.$refs.apiList[0].initApiTable(data);
+        this.$refs.apiList[0].initTable(data);
       },
       setTabTitle(data) {
         for (let index in this.apiTabs) {
@@ -239,22 +259,16 @@
             break;
           }
         }
-        this.runTestData = data;
       },
       runTest(data) {
         this.setTabTitle(data);
-        this.handleCommand("TEST");
+        this.handleTabsEdit(this.$t("commons.api"), "TEST", data);
       },
       saveApi(data) {
         this.setTabTitle(data);
-        this.$refs.apiList[0].initApiTable(data);
+        this.$refs.apiList[0].initTable(data);
       },
-      initTree(data) {
-        this.moduleOptions = data;
-      },
-      changeProtocol(data) {
-        this.currentProtocol = data;
-      },
+
       showExecResult(row) {
         this.debug(row);
       },

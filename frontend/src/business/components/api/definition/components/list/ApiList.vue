@@ -1,17 +1,22 @@
 <template>
   <div>
-    <el-card class="card-content">
-      <el-input placeholder="搜索" @blur="search" class="search-input" size="small" v-model="condition.name"/>
+    <api-list-container
+      :is-api-list-enable="isApiListEnable"
+      @isApiListEnableChange="isApiListEnableChange">
+
+      <ms-environment-select :project-id="relevanceProjectId" v-if="isRelevance" :is-read-only="isReadOnly" @setEnvironment="setEnvironment"/>
+
+      <el-input placeholder="搜索" @blur="search" class="search-input" size="small" @keyup.enter.native="search" v-model="condition.name"/>
 
       <el-table v-loading="result.loading"
-        border
-        :data="tableData" row-key="id" class="test-content adjust-table"
-        @select-all="handleSelectAll"
-        @select="handleSelect" :height="screenHeight">
+                border
+                :data="tableData" row-key="id" class="test-content adjust-table"
+                @select-all="handleSelectAll"
+                @select="handleSelect" :height="screenHeight">
         <el-table-column type="selection"/>
         <el-table-column width="40" :resizable="false" align="center">
           <template v-slot:default="scope">
-            <show-more-btn :is-show="scope.row.showMore" :buttons="buttons" :size="selectRows.size"/>
+            <show-more-btn :is-show="scope.row.showMore && !isReadOnly" :buttons="buttons" :size="selectRows.size"/>
           </template>
         </el-table-column>
 
@@ -71,7 +76,7 @@
           :label="$t('api_test.definition.api_case_passing_rate')"
           show-overflow-tooltip/>
 
-        <el-table-column :label="$t('commons.operating')" min-width="130" align="center">
+        <el-table-column v-if="!isReadOnly && !isRelevance" :label="$t('commons.operating')" min-width="130" align="center">
           <template v-slot:default="scope">
             <el-button type="text" @click="reductionApi(scope.row)" v-if="trashEnable">恢复</el-button>
             <el-button type="text" @click="editApi(scope.row)" v-else>{{$t('commons.edit')}}</el-button>
@@ -80,10 +85,10 @@
           </template>
         </el-table-column>
       </el-table>
-      <ms-table-pagination :change="initApiTable" :current-page.sync="currentPage" :page-size.sync="pageSize"
+      <ms-table-pagination :change="initTable" :current-page.sync="currentPage" :page-size.sync="pageSize"
                            :total="total"/>
-    </el-card>
-    <ms-api-case-list @refresh="initApiTable" @showExecResult="showExecResult" :currentApi="selectApi" ref="caseList"/>
+    </api-list-container>
+    <ms-api-case-list @refresh="initTable" @showExecResult="showExecResult" :currentApi="selectApi" ref="caseList"/>
     <!--批量编辑-->
     <ms-batch-edit ref="batchEdit" @batchEdit="batchEdit" :typeArr="typeArr" :value-arr="valueArr"/>
   </div>
@@ -92,25 +97,29 @@
 
 <script>
 
-  import MsTableHeader from '../../../../components/common/components/MsTableHeader';
-  import MsTableOperator from "../../../common/components/MsTableOperator";
-  import MsTableOperatorButton from "../../../common/components/MsTableOperatorButton";
-  import MsTableButton from "../../../common/components/MsTableButton";
+  import MsTableHeader from '../../../../common/components/MsTableHeader';
+  import MsTableOperator from "../../../../common/components/MsTableOperator";
+  import MsTableOperatorButton from "../../../../common/components/MsTableOperatorButton";
+  import MsTableButton from "../../../../common/components/MsTableButton";
   import {LIST_CHANGE, TrackEvent} from "@/business/components/common/head/ListEvent";
-  import MsTablePagination from "../../../common/pagination/TablePagination";
-  import MsTag from "../../../common/components/MsTag";
-  import MsApiCaseList from "./ApiCaseList";
-  import MsContainer from "../../../common/components/MsContainer";
-  import MsBottomContainer from "./BottomContainer";
-  import ShowMoreBtn from "../../../../components/track/case/components/ShowMoreBtn";
-  import MsBatchEdit from "./basis/BatchEdit";
-  import {API_METHOD_COLOUR, REQ_METHOD, API_STATUS} from "../model/JsonData";
+  import MsTablePagination from "../../../../common/pagination/TablePagination";
+  import MsTag from "../../../../common/components/MsTag";
+  import MsApiCaseList from "../case/ApiCaseList";
+  import MsContainer from "../../../../common/components/MsContainer";
+  import MsBottomContainer from "../BottomContainer";
+  import ShowMoreBtn from "../../../../track/case/components/ShowMoreBtn";
+  import MsBatchEdit from "../basis/BatchEdit";
+  import {API_METHOD_COLOUR, REQ_METHOD, API_STATUS} from "../../model/JsonData";
   import {getCurrentProjectID} from "@/common/js/utils";
-  import {WORKSPACE_ID} from '../../../../../common/js/constants';
+  import {WORKSPACE_ID} from '../../../../../../common/js/constants';
+  import ApiListContainer from "./ApiListContainer";
+  import MsEnvironmentSelect from "../case/MsEnvironmentSelect";
 
   export default {
     name: "ApiList",
     components: {
+      MsEnvironmentSelect,
+      ApiListContainer,
       MsTableButton,
       MsTableOperatorButton,
       MsTableOperator,
@@ -136,7 +145,7 @@
           {name: this.$t('api_test.definition.request.batch_edit'), handleClick: this.handleEditBatch}
         ],
         typeArr: [
-          {id: 'status', name: this.$t('api_test.definition.api_case_status')},
+          {id: 'status', name: this.$t('api_test.definition.api_status')},
           {id: 'method', name: this.$t('api_test.definition.api_type')},
           {id: 'userId', name: this.$t('api_test.definition.api_principal')},
         ],
@@ -150,8 +159,8 @@
         currentPage: 1,
         pageSize: 10,
         total: 0,
-        projectId: "",
-        screenHeight: document.documentElement.clientHeight - 330,//屏幕高度
+        screenHeight: document.documentElement.clientHeight - 330,//屏幕高度,
+        environmentId: undefined
       }
     },
     props: {
@@ -161,31 +170,47 @@
         type: Boolean,
         default: false,
       },
+      isCaseRelevance: {
+        type: Boolean,
+        default: false,
+      },
       trashEnable: {
         type: Boolean,
         default: false,
-      }
+      },
+      isApiListEnable: Boolean,
+      isReadOnly: {
+        type: Boolean,
+        default: false
+      },
+      relevanceProjectId: String,
+      isRelevance: Boolean
     },
     created: function () {
-      this.projectId = getCurrentProjectID();
-      this.initApiTable();
+      this.initTable();
       this.getMaintainerOptions();
     },
     watch: {
       selectNodeIds() {
-        this.initApiTable();
+        this.initTable();
       },
       currentProtocol() {
-        this.initApiTable();
+        this.initTable();
       },
       trashEnable() {
         if (this.trashEnable) {
-          this.initApiTable();
+          this.initTable();
         }
       },
+      relevanceProjectId() {
+        this.initTable();
+      }
     },
     methods: {
-      initApiTable() {
+      isApiListEnableChange(data) {
+        this.$emit('isApiListEnableChange', data);
+      },
+      initTable() {
         this.selectRows = new Set();
         this.condition.filters = ["Prepare", "Underway", "Completed"];
 
@@ -194,9 +219,9 @@
           this.condition.filters = ["Trash"];
           this.condition.moduleIds = [];
         }
-        if (this.projectId != null) {
-          this.condition.projectId = this.projectId;
-        }
+
+        this.condition.projectId = this.getProjectId();
+
         if (this.currentProtocol != null) {
           this.condition.protocol = this.currentProtocol;
         }
@@ -250,7 +275,7 @@
         }
       },
       search() {
-        this.initApiTable();
+        this.initTable();
       },
       buildPagePath(path) {
         return path + "/" + this.currentPage + "/" + this.pageSize;
@@ -260,8 +285,10 @@
         this.$emit('editApi', row);
       },
       reductionApi(row) {
-        let ids = [row.id];
-        this.$post('/api/definition/reduction/', ids, () => {
+        row.request = null;
+        row.response = null;
+        let rows = [row];
+        this.$post('/api/definition/reduction/', rows, () => {
           this.$success(this.$t('commons.save_success'));
           this.search();
         });
@@ -275,7 +302,7 @@
                 let ids = Array.from(this.selectRows).map(row => row.id);
                 this.$post('/api/definition/deleteBatch/', ids, () => {
                   this.selectRows.clear();
-                  this.initApiTable();
+                  this.initTable();
                   this.$success(this.$t('commons.delete_success'));
                 });
               }
@@ -289,7 +316,7 @@
                 let ids = Array.from(this.selectRows).map(row => row.id);
                 this.$post('/api/definition/removeToGc/', ids, () => {
                   this.selectRows.clear();
-                  this.initApiTable();
+                  this.initTable();
                   this.$success(this.$t('commons.delete_success'));
                 });
               }
@@ -308,7 +335,7 @@
         param.ids = ids;
         this.$post('/api/definition/batch/edit', param, () => {
           this.$success(this.$t('commons.save_success'));
-          this.initApiTable();
+          this.initTable();
         });
       },
       handleTestCase(api) {
@@ -329,7 +356,7 @@
         if (this.trashEnable) {
           this.$get('/api/definition/delete/' + api.id, () => {
             this.$success(this.$t('commons.delete_success'));
-            this.initApiTable();
+            this.initTable();
           });
           return;
         }
@@ -340,7 +367,7 @@
               let ids = [api.id];
               this.$post('/api/definition/removeToGc/', ids, () => {
                 this.$success(this.$t('commons.delete_success'));
-                this.initApiTable();
+                this.initTable();
               });
             }
           }
@@ -353,6 +380,16 @@
       },
       showExecResult(row) {
         this.$emit('showExecResult', row);
+      },
+      getProjectId() {
+        if (!this.isCaseRelevance) {
+          return getCurrentProjectID();
+        } else {
+          return this.relevanceProjectId;
+        }
+      },
+      setEnvironment(data) {
+        this.environmentId = data.id;
       }
     },
   }

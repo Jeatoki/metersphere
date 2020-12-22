@@ -62,7 +62,6 @@
             <el-popover
               placement="right-end"
               :title="$t('test_track.case.view_case')"
-              width="60%"
               trigger="hover"
             >
               <test-case-detail v-if="currentCaseId === scope.row.id" :test-case-id="currentCaseId"/>
@@ -370,7 +369,7 @@ export default {
       });
     },
     refresh() {
-      this.condition = {components: TEST_CASE_CONFIGS};
+      // this.condition = {components: TEST_CASE_CONFIGS};
       // this.selectIds.clear();
       this.selectRows.clear();
       this.$emit('refresh');

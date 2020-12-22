@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div style="min-width: 1000px;margin-bottom: 20px">
     <el-radio-group v-model="body.type" size="mini">
       <el-radio :disabled="isReadOnly" :label="type.FORM_DATA" @change="modeChange">
         {{ $t('api_test.definition.request.body_form_data') }}
@@ -182,11 +182,13 @@
       if (!this.body.type) {
         this.body.type = BODY_TYPE.FORM_DATA;
       }
-      this.body.kvs.forEach(param => {
-        if (!param.type) {
-          param.type = 'text';
-        }
-      });
+      if (this.body.kvs) {
+        this.body.kvs.forEach(param => {
+          if (!param.type) {
+            param.type = 'text';
+          }
+        });
+      }
     }
   }
 </script>
