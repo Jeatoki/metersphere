@@ -1,6 +1,7 @@
 package io.metersphere.api.dto.scenario;
 
 import io.metersphere.api.dto.scenario.request.BodyFile;
+import io.metersphere.commons.json.JSONSchemaGenerator;
 import lombok.Data;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy;
@@ -17,6 +18,7 @@ public class Body {
     private String format;
     private List<KeyValue> kvs;
     private List<KeyValue> binary;
+    private Object jsonSchema;
 
     public final static String KV = "KeyValue";
     public final static String FORM_DATA = "Form Data";
@@ -41,6 +43,12 @@ public class Body {
         } else return false;
     }
 
+    public boolean isOldKV() {
+        if (StringUtils.equals(type, KV)) {
+            return true;
+        } else return false;
+    }
+
     public List<KeyValue> getBodyParams(HTTPSamplerProxy sampler, String requestId) {
         List<KeyValue> body = new ArrayList<>();
         if (this.isKV() || this.isBinary()) {
@@ -54,8 +62,12 @@ public class Body {
         } else {
             if (!this.isJson()) {
                 sampler.setPostBodyRaw(true);
+            } else {
+                if (StringUtils.isNotEmpty(this.format) && this.format.equals("JSON-SCHEMA") && this.getJsonSchema() != null) {
+                    this.raw = JSONSchemaGenerator.getJson(com.alibaba.fastjson.JSON.toJSONString(this.getJsonSchema()));
+                }
             }
-            KeyValue keyValue = new KeyValue("", this.getRaw());
+            KeyValue keyValue = new KeyValue("", "JSON-SCHEMA", this.getRaw(), true, true);
             keyValue.setEnable(true);
             keyValue.setEncode(false);
             body.add(keyValue);
@@ -98,11 +110,14 @@ public class Body {
         return StringUtils.equals(type, XML);
     }
 
-    public boolean isWwwFROM() {
-        return StringUtils.equals(type, WWW_FROM);
+    public void initKvs() {
+        this.kvs = new ArrayList<>();
+        this.kvs.add(new KeyValue());
     }
 
-    public boolean isFromData() {
-        return StringUtils.equals(type, FORM_DATA);
+    public void initBinary() {
+        this.binary = new ArrayList<>();
+        this.binary.add(new KeyValue());
     }
+
 }

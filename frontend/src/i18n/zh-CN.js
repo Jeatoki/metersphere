@@ -65,6 +65,7 @@ export default {
     refresh: '刷新',
     remark: '备注',
     delete: '删除',
+    reduction: '恢复',
     not_filled: '未填写',
     please_select: '请选择',
     search_by_name: '根据名称搜索',
@@ -125,6 +126,7 @@ export default {
     modifier: '修改人',
     validate: "校验",
     batch_add: "批量添加",
+    check_project_tip: "请先创建或选择项目",
     date: {
       select_date: '选择日期',
       start_date: '开始日期',
@@ -171,7 +173,9 @@ export default {
     all_label: {
       case: "全部用例",
       review: "全部评审"
-    }
+    },
+    image: '镜像',
+    tag: '标签'
   },
   license: {
     title: '授权管理',
@@ -302,7 +306,8 @@ export default {
     zentao_id: 'Zentao项目ID',
     manager: '项目管理',
     no_data: '无数据',
-    select: '选择项目'
+    select: '选择项目',
+    repeatable: '接口定义URL可重复'
   },
   member: {
     create: '添加成员',
@@ -366,9 +371,9 @@ export default {
     test_error_log: '错误记录',
     test_log_details: '日志详情',
     test_details: '测试详情',
-    test_duration: '持续时间：{0} 分钟 {1} 秒',
-    test_start_time: '开始时间',
-    test_end_time: '结束时间',
+    test_duration: '当前执行时长：{0} 分钟 {1} 秒',
+    test_start_time: '开始执行时间',
+    test_end_time: '计划结束时间',
     test_stop_now: '立即停止',
     test_stop_now_confirm: '确定要立即停止当前测试吗？',
     test_rerun_confirm: '确定要再次执行当前测试吗？',
@@ -430,6 +435,10 @@ export default {
     input_rps_limit: '请输入限制',
     ramp_up_time_within: '在',
     ramp_up_time_minutes: '秒内，分',
+    ramp_up_time_seconds: '秒内增加并发用户',
+    iterate_num: '迭代次数 (次): ',
+    by_iteration: '按迭代次数',
+    by_duration: '按持续时间',
     ramp_up_time_times: '次增加并发用户',
     advanced_config_error: '高级配置校验失败',
     domain_bind: '域名绑定',
@@ -484,6 +493,10 @@ export default {
       file_exist: "该项目下已存在该jar包",
       upload_limit_size: "上传文件大小不能超过 30MB!",
     },
+    batch_menus: {
+      select_all_data: "选择所有数据(共{0}条)",
+      select_show_data: "选择可见数据(共{0}条)",
+    },
     definition: {
       api_title: "接口列表",
       api_name: "接口名称",
@@ -496,8 +509,18 @@ export default {
       api_case_status: "用例状态",
       api_case_passing_rate: "用例通过率",
       create_tip: "注: 详细的接口信息可以在编辑页面填写",
+      select_comp: {
+        no_data: "无数据",
+        add_data: "去添加"
+      },
       request: {
         grade_info: "按等级筛选",
+        grade_order_asc: "按用例等级从高到低",
+        grade_order_desc: "按用例等级从高到低",
+        create_time_order_asc: "按创建时间从前到后",
+        create_time_order_desc: "按创建时间从后到前",
+        update_time_order_asc: "按更新时间从前到后",
+        update_time_order_desc: "按更新时间从后到前",
         run_env: "运行环境",
         select_case: "搜索用例",
         case: "用例",
@@ -527,6 +550,7 @@ export default {
         res_param: "响应内容",
         batch_delete: "批量删除",
         delete_confirm: "确认删除接口",
+        delete_confirm_step: "确认删除步骤",
         assertions_rule: "断言规则",
         response_header: "响应头",
         response_body: "响应体",
@@ -545,6 +569,9 @@ export default {
         update_info: '更新',
         batch_edit: "批量编辑",
         path_valid_info: "请求路径无效",
+        other_config: "其他设置",
+        message_template: "报文模版",
+        tcp_parameter_tip: "请求参数可以在请求模版通过${xxx}引用",
       }
     },
     automation: {
@@ -552,11 +579,12 @@ export default {
       create_tag: "创建Tag",
       scenario_step: "场景步骤",
       step_total: "步骤总数",
-      scenario_total: "场景公共参数",
+      scenario_total: "场景变量",
       api_list_import: "接口列表导入",
       external_import: "外部导入",
       wait_controller: "等待控制器",
       if_controller: "条件控制器",
+      loop_controller: "循环控制器",
       scenario_import: "场景导入",
       customize_script: "自定义脚本",
       customize_req: "自定义请求",
@@ -713,6 +741,7 @@ export default {
         variable_name: "变量名称",
         set_failure_status: "设置失败状态",
         set_failure_msg: "设置失败消息",
+        suggest_tip: "点击便签添加JSONPath断言",
       },
       extract: {
         label: "提取",
@@ -723,6 +752,9 @@ export default {
         regex_expression: "Perl型正则表达式",
         json_path_expression: "JSONPath表达式",
         xpath_expression: "XPath表达式",
+        suggest_tip: "点击便签添加JSONPath提取",
+        json_path_suggest: "推荐JSONPath提取",
+        json_path_clear: "清空JSONPath提取",
       },
       processor: {
         pre_exec_script: "预执行脚本",
@@ -790,94 +822,96 @@ export default {
       ms_tip: "支持 Metersphere json 格式",
       ms_export_tip: "通过 Metersphere 接口测试页面或者浏览器插件导出 json 格式文件",
       postman_tip: "只支持 Postman Collection v2.1 格式的 json 文件",
-      swagger_tip: "只支持 Swagger 2.x 版本的 json 文件",
+      swagger_tip: "支持 Swagger 2.0 与 3.0 版本的 json 文件",
       post_export_tip: "通过 Postman 导出测试集合",
       swagger_export_tip: "通过 Swagger 页面导出",
       suffixFormatErr: "文件格式不符合要求",
       swagger_url_import: "使用URL导入",
     },
-    home_page:{
-      unit_of_measurement:"个",
-      api_count_card:{
+    home_page: {
+      unit_of_measurement: "个",
+      unit_of_count: "个",
+      unit_of_times: "次",
+      api_count_card: {
         title: "接口数量统计",
       },
-      test_case_count_card:{
+      test_case_count_card: {
         title: "接口用例数量统计",
       },
-      test_scene_count_card:{
+      test_scene_count_card: {
         title: "场景用例数量统计",
       },
-      schedule_task_count_card:{
+      schedule_task_count_card: {
         title: "定时任务数量统计",
       },
-      detail_card:{
-        running:"进行中",
-        not_started:"未开始",
-        finished:"已完成",
-        uncoverage:"未覆盖",
-        coverage:"已覆盖",
-        unexecute:"未执行",
-        execution_failed:"未通过",
-        execution_pass:"已通过",
-        failed:"失败",
-        success:"成功",
-        rate:{
-          completion:"完成率",
-          coverage:"覆盖率",
-          pass:"通过率",
-          success:"成功率",
+      detail_card: {
+        running: "进行中",
+        not_started: "未开始",
+        finished: "已完成",
+        uncoverage: "未覆盖",
+        coverage: "已覆盖",
+        unexecute: "未执行",
+        execution_failed: "未通过",
+        execution_pass: "已通过",
+        failed: "失败",
+        success: "成功",
+        rate: {
+          completion: "完成率",
+          coverage: "覆盖率",
+          pass: "通过率",
+          success: "成功率",
         },
       },
-      api_details_card:{
+      api_details_card: {
         title: "接口",
-        this_week_add:"本周新增: {0}个",
+        this_week_add: "本周新增:",
       },
-      test_case_details_card:{
+      test_case_details_card: {
         title: "用例",
-        this_week_add:"本周新增: {0}个",
-        this_week_execute:"本周执行: {0}次",
-        executed:"历史总执行: {0}次",
-        this_week_add_sm:"本周新增:<br/>{0}个",
-        this_week_execute_sm:"本周执行:<br/>{0}次",
-        executed_sm:"历史总执行:<br/>{0}次",
+        this_week_add: "本周新增:",
+        this_week_execute: "本周执行: {0}次",
+        executed: "历史总执行: {0}次",
+        this_week_add_sm: "本周新增:",
+        this_week_execute_sm: "本周执行:<br/>{0}次",
+        executed_sm: "历史总执行:<br/>{0}次",
       },
-      test_scene_details_card:{
+      test_scene_details_card: {
         title: "场景",
-        this_week_add:"本周新增: {0}个",
-        this_week_execute:"本周执行: {0}次",
-        executed:"历史总执行: {0}次",
-        this_week_add_sm:"本周新增:<br/>{0}个",
-        this_week_execute_sm:"本周执行:<br/>{0}次",
-        executed_sm:"历史总执行:<br/>{0}次",
+        this_week_add: "本周新增:",
+        this_week_execute: "本周执行: {0}次",
+        executed: "历史总执行: {0}次",
+        this_week_add_sm: "本周新增:",
+        this_week_execute_sm: "本周执行:<br/>{0}次",
+        executed_sm: "历史总执行:<br/>{0}次",
       },
-      schedule_task_details_card:{
+      schedule_task_details_card: {
         title: "定时任务",
-        this_week_add:"本周新增: {0}个",
-        this_week_execute:"本周执行: {0}次",
-        executed:"历史总执行: {0}次",
-        this_week_add_sm:"本周新增:<br/>{0}个",
-        this_week_execute_sm:"本周执行:<br/>{0}次",
-        executed_sm:"历史总执行:<br/>{0}次",
+        this_week_add: "本周新增: {0}个",
+        this_week_execute: "本周执行: {0}次",
+        executed: "历史总执行: {0}次",
+        this_week_add_sm: "本周新增:<br/>{0}个",
+        this_week_execute_sm: "本周执行:<br/>{0}次",
+        executed_sm: "历史总执行:<br/>{0}次",
       },
-      failed_case_list:{
+      failed_case_list: {
         title: "过去7天测试计划失败用例TOP 10",
-        table_coloum:{
+        table_coloum: {
           index: "排名",
           case_name: "用例名称",
           case_type: "用例类型",
           test_plan: "所属测试计划",
           failure_times: "失败次数",
         },
-        table_value:{
-          case_type:{
+        table_value: {
+          case_type: {
             api: "接口用例",
             scene: "场景用例",
           }
         }
       },
-      running_task_list:{
+      running_task_list: {
         title: "运行中的定时任务",
-        table_coloum:{
+        table_coloum: {
           index: "序号",
           scenario: "场景名称",
           run_rule: "运行规则",
@@ -886,7 +920,7 @@ export default {
           create_user: "创建人",
           update_time: "更新时间",
         },
-        confirm:{
+        confirm: {
           close_title: "要关闭这条定时任务吗？",
         }
       }
@@ -1047,6 +1081,7 @@ export default {
       edit_plan: "编辑测试计划",
       plan_name: "计划名称",
       plan_project: "所属项目",
+      related_project: "关联项目",
       plan_stage: "测试阶段",
       plan_status: "当前状态",
       smoke_test: "冒烟测试",
@@ -1059,10 +1094,12 @@ export default {
       input_plan_name: "请输入测试计划名称",
       input_plan_principal: "请选择负责人",
       input_plan_project: "请选择所属项目",
+      input_related_project: "请选择关联项目",
       input_plan_stage: "请选择测试阶段",
       plan_status_prepare: "未开始",
       plan_status_running: "进行中",
       plan_status_completed: "已完成",
+      plan_status_trash: "废弃",
       planned_start_time: "计划开始",
       planned_end_time: "计划结束",
       actual_start_time: "实际开始",
@@ -1070,6 +1107,16 @@ export default {
       plan_delete_confirm: "将删除该测试计划下所有用例，确认删除测试计划: ",
       plan_delete_tip: "该测试计划正在进行中，请确认再删除！",
       plan_delete: "删除计划",
+      load_case: {
+        execution_status: "执行状态",
+        report: "报告",
+        view_report: "查看报告",
+        unlink_in_bulk: "批量取消关联",
+        batch_exec_cases: "批量执行用例",
+        exec: "正在执行....",
+        error: "用例执行错误，请单独调试该用例！",
+        report_not_found: "报告不存在",
+      }
     },
     review: {
       test_review: "用例评审",
@@ -1206,6 +1253,22 @@ export default {
       tapd_current_owner: "Tapd bug 处理人：",
       zentao_bug_build: "禅道 bug 影响版本",
       zentao_bug_assigned: "禅道 bug 处理人",
+    },
+    report: {
+      name: "测试计划报告",
+      list: {
+        name: "名称",
+        test_plan: "测试计划名称",
+        creator: "创建人",
+        create_time: "创建时间",
+        trigger_mode: "触发方式",
+        status: "状态",
+        operation: "操作",
+      },
+      trigger_mode: {
+        manual: "手动触发",
+        automation: "自动触发",
+      },
     }
   },
   test_resource_pool: {
@@ -1240,6 +1303,8 @@ export default {
     host: '主机号不能为空',
     port: '端口号不能为空',
     account: '账户不能为空',
+    test_recipients: '测试收件人',
+    tip: '提示：仅用来作为测试邮件收件人',
   },
   i18n: {
     home: '首页',
@@ -1350,5 +1415,70 @@ export default {
     workspace_quota_list: "{0}的工作空间配额列表",
     unlimited: "无限制",
     clean: "清空"
+  },
+  schema: {
+    title: "标题",
+    import_json: "导入 json",
+    base_setting: "基础设置",
+    all_setting: "编辑源码",
+    default: "默认值",
+    description: "描述",
+    adv_setting: "高级设置",
+    add_child_node: "添加子节点",
+    add_sibling_node: "添加兄弟节点",
+    add_node: "添加兄弟/子节点",
+    remove_node: "删除节点",
+    child_node: "子节点",
+    sibling_node: "兄弟节点",
+    ok: "确定",
+    cancel: "取消",
+    minLength: "最小长度",
+    maxLength: "最大长度",
+    pattern: "用正则表达式约束字符串",
+    exclusiveMinimum: "开启后，数据必须大于最小值",
+    exclusiveMaximum: "开启后，数据必须小于最大值",
+    minimum: "最小值",
+    maximum: "最大值",
+    uniqueItems: "开启后，每个元素都不相同",
+    minItems: "最小元素个数",
+    maxItems: "最大元素个数",
+    minProperties: "最小元素个数",
+    maxProperties: "最大元素个数",
+    checked_all: "全选",
+    valid_json: "不是合法的json字符串",
+    enum: "枚举",
+    enum_msg: "每行只能写一个值",
+    enum_desc: "备注",
+    enum_desc_msg: "备注描述信息",
+    required: "是否必须",
+    mock: "mock",
+    mockLink: "查看文档",
+    format: "格式化",
+    nothing: "无",
+    preview: "预览",
+    add_custom: "添加自定义属性"
+  },
+  loop: {
+    loops_title: "次数循环",
+    foreach: "ForEach 循环",
+    while: "While 循环",
+    loops: "循环次数",
+    interval: "循环间隔",
+    proceed: "成功后继续循环",
+    timeout: "循环超时时间",
+  },
+  variables: {
+    cvs_info: "只能上传CSV文件",
+    end: "结束",
+    start: "开始",
+    increment: "增量",
+    counter_info: "000产生至少3位数字。user_000输出形式为user_nnn",
+    config: "配置",
+    add_file: "添加文件",
+    delimiter: "分隔符",
+    format: "输出格式",
+  },
+  auth_source: {
+    delete_prompt: '此操作会删除认证源，是否继续？'
   }
 };

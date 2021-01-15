@@ -27,4 +27,8 @@ public interface ExtApiScenarioMapper {
     long countByProjectIDAndCreatInThisWeek(@Param("projectId") String projectId, @Param("firstDayTimestamp") long firstDayTimestamp, @Param("lastDayTimestamp") long lastDayTimestamp);
 
     List<ApiDataCountResult> countRunResultByProjectID(String projectId);
+
+    List<String> selectIdsNotExistsInPlan(String projectId, String planId);
+
+    ApiScenario getNextNum(@Param("projectId") String projectId);
 }

@@ -1,47 +1,41 @@
 <template>
-  <div :style="customizeStyle" v-loading="loading">
-    <el-card>
-      <div class="el-step__icon is-text" style="color: #015478;background-color: #E6EEF2;margin-right: 10px" v-if="extract.index">
-        <div class="el-step__icon-inner">{{extract.index}}</div>
+  <api-base-component
+    @copy="copyRow"
+    @remove="remove"
+    :data="extract"
+    :draggable="draggable"
+    color="#015478"
+    background-color="#E6EEF2"
+    :title="$t('api_test.definition.request.extract_param')">
+    <div style="margin: 20px">
+      <div class="extract-description">
+        {{$t('api_test.request.extract.description')}}
       </div>
-      <el-button class="ms-left-buttion" size="small" style="color: #015478;background-color: #E6EEF2">{{$t('api_test.definition.request.extract_param')}}</el-button>
-      <el-input size="small" v-model="extract.name" style="width: 40%;margin-left: 20px" :placeholder="$t('commons.input_name')"/>
-      <div style="margin-right: 20px; float: right">
-        <i class="icon el-icon-arrow-right" :class="{'is-active': extract.active}" @click="active(extract)" style="margin-left: 20px"/>
-        <el-switch v-model="extract.enable" style="margin-left: 10px"/>
-        <el-button size="mini" icon="el-icon-copy-document" circle @click="copyRow" style="margin-left: 10px"/>
-        <el-button size="mini" icon="el-icon-delete" type="danger" circle @click="remove" style="margin-left: 10px"/>
-      </div>
-      <!-- 请求参数-->
-      <el-collapse-transition>
-        <div v-if="extract.active">
-          <div style="margin: 20px">
-            <div class="extract-description">
-              {{$t('api_test.request.extract.description')}}
-            </div>
-            <div class="extract-add">
-              <el-row :gutter="10">
-                <el-col :span="2">
-                  <el-select :disabled="isReadOnly" class="extract-item" v-model="type" :placeholder="$t('api_test.request.extract.select_type')"
-                             size="small">
-                    <el-option :label="$t('api_test.request.extract.regex')" :value="options.REGEX"/>
-                    <el-option label="JSONPath" :value="options.JSON_PATH"/>
-                    <el-option label="XPath" :value="options.XPATH"/>
-                  </el-select>
-                </el-col>
-                <el-col :span="22">
-                  <ms-api-extract-common :is-read-only="isReadOnly" :extract-type="type" :list="list" v-if="type" :callback="after"/>
-                </el-col>
+      <div class="extract-add">
+        <el-row :gutter="10">
+          <el-col :span="2">
+            <el-select :disabled="isReadOnly" class="extract-item" v-model="type" :placeholder="$t('api_test.request.extract.select_type')"
+                       size="small">
+              <el-option :label="$t('api_test.request.extract.regex')" :value="options.REGEX"/>
+              <el-option label="JSONPath" :value="options.JSON_PATH"/>
+              <el-option label="XPath" :value="options.XPATH"/>
+            </el-select>
+          </el-col>
+          <el-col :span="22">
+            <ms-api-extract-common :is-read-only="isReadOnly" :extract-type="type" :list="list" v-if="type" :callback="after"/>
+          </el-col>
 
-                <el-button v-if="!type" :disabled="true" type="primary" size="small">Add</el-button>
-              </el-row>
-            </div>
-            <ms-api-extract-edit :is-read-only="isReadOnly" :reloadData="reloadData" :extract="extract"/>
-          </div>
-        </div>
-      </el-collapse-transition>
-    </el-card>
-  </div>
+          <el-button v-if="!type" :disabled="true" type="primary" size="small">Add</el-button>
+        </el-row>
+      </div>
+
+      <api-json-path-suggest-button :open-tip="$t('api_test.request.extract.json_path_suggest')"
+                                    :clear-tip="$t('api_test.request.extract.json_path_clear')" @open="suggestJsonOpen" @clear="clearJson"/>
+
+      <ms-api-extract-edit :is-read-only="isReadOnly" :reloadData="reloadData" :extract="extract"/>
+    </div>
+    <ms-api-jsonpath-suggest :tip="$t('api_test.request.extract.suggest_tip')" @addSuggest="addJsonPathSuggest" ref="jsonpathSuggest"/>
+  </api-base-component>
 </template>
 
 <script>
@@ -49,17 +43,23 @@
   import MsApiExtractEdit from "./ApiExtractEdit";
   import MsApiExtractCommon from "./ApiExtractCommon";
   import {getUUID} from "@/common/js/utils";
+  import ApiJsonPathSuggestButton from "../assertion/ApiJsonPathSuggestButton";
+  import MsApiJsonpathSuggest from "../assertion/ApiJsonpathSuggest";
+  import {ExtractJSONPath} from "../../../test/model/ScenarioModel";
+  import ApiBaseComponent from "../../../automation/scenario/common/ApiBaseComponent";
 
   export default {
     name: "MsApiExtract",
-
     components: {
+      ApiBaseComponent,
+      MsApiJsonpathSuggest,
+      ApiJsonPathSuggestButton,
       MsApiExtractCommon,
       MsApiExtractEdit,
     },
-
     props: {
       extract: {},
+      response: {},
       node: {},
       customizeStyle: {
         type: String,
@@ -68,9 +68,12 @@
       isReadOnly: {
         type: Boolean,
         default: false
+      },
+      draggable: {
+        type: Boolean,
+        default: false,
       }
     },
-
     data() {
       return {
         options: EXTRACT_TYPE,
@@ -79,7 +82,6 @@
         loading: false,
       }
     },
-
     methods: {
       after() {
         this.type = "";
@@ -101,6 +103,25 @@
         item.active = !item.active;
         this.reload();
       },
+      suggestJsonOpen() {
+        this.$emit('suggestClick');
+        this.$nextTick(() => {
+          if (!this.response || !this.response.responseResult || !this.response.responseResult.body) {
+            this.$message(this.$t('api_test.request.assertions.debug_first'));
+            return;
+          }
+          this.$refs.jsonpathSuggest.open(this.response.responseResult.body);
+        })
+      },
+      addJsonPathSuggest(data) {
+        let option = {};
+        option.variable = data.key;
+        option.expression = data.path;
+        this.extract.json.push(new ExtractJSONPath(option));
+      },
+      clearJson() {
+        this.extract.json = [];
+      }
     },
     computed: {
       list() {
@@ -134,10 +155,6 @@
     border: #DCDFE6 solid 1px;
     margin: 5px 0;
     border-radius: 5px;
-  }
-
-  .icon.is-active {
-    transform: rotate(90deg);
   }
 
   /deep/ .el-card__body {

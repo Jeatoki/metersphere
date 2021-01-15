@@ -9,25 +9,37 @@ import io.metersphere.api.dto.datacount.request.ScheduleInfoRequest;
 import io.metersphere.api.dto.datacount.response.ApiDataCountDTO;
 import io.metersphere.api.dto.datacount.response.ExecutedCaseInfoDTO;
 import io.metersphere.api.dto.datacount.response.TaskInfoResult;
+import io.metersphere.api.dto.definition.RunDefinitionRequest;
+import io.metersphere.api.dto.definition.request.MsTestElement;
 import io.metersphere.api.dto.scenario.request.dubbo.RegistryCenter;
 import io.metersphere.api.service.*;
 import io.metersphere.base.domain.ApiTest;
+import io.metersphere.base.domain.LoadTest;
 import io.metersphere.base.domain.Schedule;
+import io.metersphere.commons.constants.PerformanceTestStatus;
 import io.metersphere.commons.constants.RoleConstants;
 import io.metersphere.commons.constants.ScheduleGroup;
-import io.metersphere.commons.utils.*;
+import io.metersphere.commons.utils.CronUtils;
+import io.metersphere.commons.utils.PageUtils;
+import io.metersphere.commons.utils.Pager;
+import io.metersphere.commons.utils.SessionUtils;
 import io.metersphere.controller.request.QueryScheduleRequest;
 import io.metersphere.dto.ScheduleDao;
-import io.metersphere.service.CheckOwnerService;
-
+import io.metersphere.performance.service.PerformanceTestService;
+import io.metersphere.service.CheckPermissionService;
+import io.metersphere.service.FileService;
 import io.metersphere.service.ScheduleService;
+import io.metersphere.track.request.testplan.SaveTestPlanRequest;
+import org.apache.http.entity.ContentType;
+import org.apache.jorphan.collections.HashTree;
 import org.apache.shiro.authz.annotation.Logical;
 import org.apache.shiro.authz.annotation.RequiresRoles;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
-
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -46,7 +58,7 @@ public class APITestController {
     @Resource
     private ApiDefinitionService apiDefinitionService;
     @Resource
-    private CheckOwnerService checkownerService;
+    private CheckPermissionService checkownerService;
     @Resource
     private ApiTestCaseService apiTestCaseService;
     @Resource
@@ -59,6 +71,12 @@ public class APITestController {
     private ScheduleService scheduleService;
     @Resource
     private APIReportService apiReportService;
+    @Resource
+    private PerformanceTestService performanceTestService;
+    @Resource
+    private CheckPermissionService checkPermissionService;
+    @Resource
+    private HistoricalDataUpgradeService historicalDataUpgradeService;
 
     @GetMapping("recent/{count}")
     public List<APITestResult> recentTest(@PathVariable int count) {
@@ -108,6 +126,7 @@ public class APITestController {
     public void mergeCreate(@RequestPart("request") SaveAPITestRequest request, @RequestPart(value = "file") MultipartFile file, @RequestPart(value = "selectIds") List<String> selectIds) {
         apiTestService.mergeCreate(request, file, selectIds);
     }
+
     @PostMapping(value = "/update", consumes = {"multipart/form-data"})
     public void update(@RequestPart("request") SaveAPITestRequest request, @RequestPart(value = "file") MultipartFile file, @RequestPart(value = "files") List<MultipartFile> bodyFiles) {
         checkownerService.checkApiTestOwner(request.getId());
@@ -253,7 +272,7 @@ public class APITestController {
          * */
         long dateCountByCreateInThisWeek = apiAutomationService.countScenarioByProjectIDAndCreatInThisWeek(projectId);
         apiCountResult.setThisWeekAddedCount(dateCountByCreateInThisWeek);
-        long executedInThisWeekCountNumber = apiScenarioReportService.countByProjectIDAndCreateInThisWeek(projectId);
+        long executedInThisWeekCountNumber = apiScenarioReportService.countByProjectIdAndCreateInThisWeek(projectId);
         apiCountResult.setThisWeekExecutedCount(executedInThisWeekCountNumber);
         long executedCountNumber = apiScenarioReportService.countByProjectID(projectId);
         apiCountResult.setExecutedCount(executedCountNumber);
@@ -262,40 +281,46 @@ public class APITestController {
         List<ApiDataCountResult> countResultByRunResult = apiAutomationService.countRunResultByProjectID(projectId);
         apiCountResult.countRunResult(countResultByRunResult);
 
-        long allCount = apiCountResult.getUnexecuteCount()+apiCountResult.getExecutionPassCount()+apiCountResult.getExecutionFailedCount();
+        long allCount = apiCountResult.getUnexecuteCount() + apiCountResult.getExecutionPassCount() + apiCountResult.getExecutionFailedCount();
 
-        if(allCount!=0){
-            float coverageRageNumber =(float)apiCountResult.getExecutionPassCount()*100/allCount;
+        if (allCount != 0) {
+            float coverageRageNumber = (float) apiCountResult.getExecutionPassCount() * 100 / allCount;
             DecimalFormat df = new DecimalFormat("0.0");
-            apiCountResult.setCoverageRage(df.format(coverageRageNumber)+"%");
+            apiCountResult.setPassRage(df.format(coverageRageNumber) + "%");
         }
 
-        return  apiCountResult;
+        return apiCountResult;
 
     }
 
-    @GetMapping("/scheduleTaskInfoCount/{workSpaceID}")
-    public ApiDataCountDTO scheduleTaskInfoCount(@PathVariable String workSpaceID) {
+    @GetMapping("/scheduleTaskInfoCount/{projectId}")
+    public ApiDataCountDTO scheduleTaskInfoCount(@PathVariable String projectId) {
         ApiDataCountDTO apiCountResult = new ApiDataCountDTO();
 
-        long allTaskCount = scheduleService.countTaskByWorkspaceIdAndGroup(workSpaceID,ScheduleGroup.API_TEST.name());
+        long allTaskCount = scheduleService.countTaskByProjectId(projectId);
 
         apiCountResult.setAllApiDataCountNumber(allTaskCount);
 
-        long taskCountInThisWeek = scheduleService.countTaskByWorkspaceIdAndGroupInThisWeek(workSpaceID,ScheduleGroup.API_TEST.name());
+        long taskCountInThisWeek = scheduleService.countTaskByProjectIdInThisWeek(projectId);
         apiCountResult.setThisWeekAddedCount(taskCountInThisWeek);
-        long executedInThisWeekCountNumber = apiReportService.countByWorkspaceIdAndGroupAndCreateInThisWeek(workSpaceID,ScheduleGroup.API_TEST.name());
+//        long api_executedInThisWeekCountNumber = apiReportService.countByProjectIdAndCreateInThisWeek(projectId);
+        long executedInThisWeekCountNumber = apiScenarioReportService.countByProjectIdAndCreateAndByScheduleInThisWeek(projectId);
+//        long executedInThisWeekCountNumber = api_executedInThisWeekCountNumber+scene_executedInThisWeekCountNumber;
         apiCountResult.setThisWeekExecutedCount(executedInThisWeekCountNumber);
 
         //统计 失败 成功 以及总数
-        List<ApiDataCountResult> allExecuteResult = apiReportService.countByWorkspaceIdAndGroupGroupByExecuteResult(workSpaceID,ScheduleGroup.API_TEST.name());
+//        List<ApiDataCountResult> api_allExecuteResult = apiReportService.countByProjectIdGroupByExecuteResult(projectId);
+        List<ApiDataCountResult> allExecuteResult = apiScenarioReportService.countByProjectIdGroupByExecuteResult(projectId);
+//        List<ApiDataCountResult> allExecuteResult = new ArrayList<>();
+//        allExecuteResult.addAll(api_allExecuteResult);
+//        allExecuteResult.addAll(scene_allExecuteResult);
         apiCountResult.countScheduleExecute(allExecuteResult);
 
         long allCount = apiCountResult.getExecutedCount();
         if(allCount!=0){
             float coverageRageNumber =(float)apiCountResult.getSuccessCount()*100/allCount;
             DecimalFormat df = new DecimalFormat("0.0");
-            apiCountResult.setCoverageRage(df.format(coverageRageNumber)+"%");
+            apiCountResult.setSuccessRage(df.format(coverageRageNumber)+"%");
         }
 
         return  apiCountResult;
@@ -315,11 +340,12 @@ public class APITestController {
 
             if(dataIndex<selectDataList.size()){
                 ExecutedCaseInfoResult selectData = selectDataList.get(dataIndex);
-
+                dataDTO.setCaseID(selectData.getTestCaseID());
                 dataDTO.setCaseName(selectData.getCaseName());
                 dataDTO.setTestPlan(selectData.getTestPlan());
                 dataDTO.setFailureTimes(selectData.getFailureTimes());
                 dataDTO.setCaseType(selectData.getCaseType());
+                dataDTO.setTestPlanDTOList(selectData.getTestPlanDTOList());
             }else {
                 dataDTO.setCaseName("");
                 dataDTO.setTestPlan("");
@@ -329,12 +355,14 @@ public class APITestController {
         return  returnList;
     }
 
-    @GetMapping("/runningTask/{workspaceID}")
-    public List<TaskInfoResult> runningTask(@PathVariable String workspaceID) {
+    @GetMapping("/runningTask/{projectID}")
+    public List<TaskInfoResult> runningTask(@PathVariable String projectID) {
 
-        List<TaskInfoResult> resultList = scheduleService.findRunningTaskInfoByWorkspaceID(workspaceID);
+        List<TaskInfoResult> resultList = scheduleService.findRunningTaskInfoByProjectID(projectID);
+        int dataIndex = 1;
         for (TaskInfoResult taskInfo :
                 resultList) {
+            taskInfo.setIndex(dataIndex++);
             Date nextExecutionTime = CronUtils.getNextTriggerTime(taskInfo.getRule());
             if(nextExecutionTime!=null){
                 taskInfo.setNextExecutionTime(nextExecutionTime.getTime());
@@ -347,6 +375,21 @@ public class APITestController {
     public void updateScheduleEnableByPrimyKey(@RequestBody ScheduleInfoRequest request) {
         Schedule schedule = scheduleService.getSchedule(request.getTaskID());
         schedule.setEnable(request.isEnable());
-        apiTestService.updateSchedule(schedule);
+        apiAutomationService.updateSchedule(schedule);
     }
+    @PostMapping(value = "/historicalDataUpgrade")
+    public String historicalDataUpgrade(@RequestBody SaveHistoricalDataUpgrade request) {
+        return historicalDataUpgradeService.upgrade(request);
+    }
+
+    @PostMapping(value = "/genPerformanceTestXml", consumes = {"multipart/form-data"})
+    public JmxInfoDTO genPerformanceTest(@RequestPart("request") RunDefinitionRequest runRequest, @RequestPart(value = "files") List<MultipartFile> bodyFiles) {
+        HashTree hashTree = runRequest.getTestElement().generateHashTree();
+        String jmxString = runRequest.getTestElement().getJmx(hashTree);
+        JmxInfoDTO dto = new JmxInfoDTO();
+        dto.setName(runRequest.getName()+".jmx");
+        dto.setXml(jmxString);
+        return  dto;
+    }
+
 }

@@ -2,16 +2,16 @@
 
   <div class="card-container">
     <!-- HTTP 请求参数 -->
-    <ms-edit-complete-http-api @runTest="runTest" @saveApi="saveApi" :request="request" :response="response"
+    <ms-edit-complete-http-api @runTest="runTest" @saveApi="saveApi" @createRootModelInTree="createRootModelInTree" :request="request" :response="response"
                                :basisData="currentApi" :moduleOptions="moduleOptions" v-if="currentProtocol === 'HTTP'"/>
     <!-- TCP -->
-    <ms-edit-complete-tcp-api :request="request" @runTest="runTest" @saveApi="saveApi" :basisData="currentApi"
+    <ms-edit-complete-tcp-api :request="request" @runTest="runTest" @createRootModelInTree="createRootModelInTree" @saveApi="saveApi" :basisData="currentApi"
                               :moduleOptions="moduleOptions" v-if="currentProtocol === 'TCP'"/>
     <!--DUBBO-->
-    <ms-edit-complete-dubbo-api :request="request" @runTest="runTest" @saveApi="saveApi" :basisData="currentApi"
+    <ms-edit-complete-dubbo-api :request="request" @runTest="runTest" @createRootModelInTree="createRootModelInTree" @saveApi="saveApi" :basisData="currentApi"
                                 :moduleOptions="moduleOptions" v-if="currentProtocol === 'DUBBO'"/>
     <!--SQL-->
-    <ms-edit-complete-sql-api :request="request" @runTest="runTest" @saveApi="saveApi" :basisData="currentApi"
+    <ms-edit-complete-sql-api :request="request" @runTest="runTest" @createRootModelInTree="createRootModelInTree" @saveApi="saveApi" :basisData="currentApi"
                               :moduleOptions="moduleOptions" v-if="currentProtocol === 'SQL'"/>
   </div>
 </template>
@@ -75,6 +75,9 @@
           this.$emit('runTest', data);
         })
       },
+      createRootModelInTree(){
+        this.$emit("createRootModel");
+      },
       getMaintainerOptions() {
         let workspaceId = localStorage.getItem(WORKSPACE_ID);
         this.$post('/user/ws/member/tester/list', {workspaceId: workspaceId}, response => {
@@ -87,6 +90,9 @@
             this.request = this.currentApi.request;
           } else {
             this.request = JSON.parse(this.currentApi.request);
+          }
+          if (!this.request.headers) {
+            this.request.headers = [];
           }
           this.currentApi.request = this.request;
           return true;
@@ -135,6 +141,9 @@
         if (!this.request.hashTree) {
           this.request.hashTree = [];
         }
+        if (this.request.body && !this.request.body.binary) {
+          this.request.body.binary = [];
+        }
         // 处理导入数据缺失问题
         if (this.response.body) {
           let body = new Body();
@@ -144,6 +153,9 @@
           }
           if (!body.kvs) {
             body.kvs = [];
+          }
+          if (!body.binary) {
+            body.binary = [];
           }
           this.response.body = body;
         }

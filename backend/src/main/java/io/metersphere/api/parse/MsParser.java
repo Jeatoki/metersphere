@@ -14,12 +14,14 @@ import io.metersphere.api.dto.scenario.request.RequestType;
 import io.metersphere.api.service.ApiModuleService;
 import io.metersphere.base.domain.ApiModule;
 import io.metersphere.commons.utils.CommonBeanFactory;
+import io.metersphere.commons.utils.LogUtil;
 import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
+import java.util.*;
 
 public class MsParser extends ApiImportAbstractParser {
 
@@ -32,7 +34,7 @@ public class MsParser extends ApiImportAbstractParser {
         if (testObject.get("projectName") != null) {
             return parseMsFormat(testStr, request);
         } else {
-            return parsePluginFormat(testObject, request.isSaved());
+            return parsePluginFormat(testObject, request);
         }
     }
 
@@ -42,7 +44,10 @@ public class MsParser extends ApiImportAbstractParser {
         List<ApiDefinitionResult> data = apiDefinitionImport.getData();
         data.forEach(apiDefinition -> {
             String id = UUID.randomUUID().toString();
-            apiDefinition.setModuleId(null);
+            if (StringUtils.isBlank(apiDefinition.getModulePath())) {
+                apiDefinition.setModuleId(null);
+            }
+            parseModule(apiDefinition, importRequest);
             apiDefinition.setId(id);
             apiDefinition.setProjectId(this.projectId);
             String request = apiDefinition.getRequest();
@@ -53,16 +58,16 @@ public class MsParser extends ApiImportAbstractParser {
         return apiDefinitionImport;
     }
 
-    private ApiDefinitionImport parsePluginFormat(JSONObject testObject, boolean isSaved) {
+    private ApiDefinitionImport parsePluginFormat(JSONObject testObject,  ApiTestImportRequest importRequest) {
         List<ApiDefinitionResult> results = new ArrayList<>();
         ApiDefinitionImport apiImport = new ApiDefinitionImport();
         apiImport.setProtocol(RequestType.HTTP);
         apiImport.setData(results);
         testObject.keySet().forEach(tag -> {
-            ApiModule module = apiModuleService.getNewModule(tag, this.projectId, 1);
-            if (isSaved) {
-                createModule(module);
-            }
+
+            ApiModule parentModule = getSelectModule(importRequest.getModuleId());
+            ApiModule module = buildModule(parentModule, tag, importRequest.isSaved());
+
             JSONObject requests = testObject.getJSONObject(tag);
             requests.keySet().forEach(requestName -> {
 
@@ -74,9 +79,9 @@ public class MsParser extends ApiImportAbstractParser {
                 ApiDefinitionResult apiDefinition = buildApiDefinition(request.getId(), requestName, path, method);
                 apiDefinition.setModuleId(module.getId());
                 apiDefinition.setProjectId(this.projectId);
-
                 parseBody(requestObject, request.getBody());
                 parseHeader(requestObject, request.getHeaders());
+                parsePath(request, apiDefinition);
                 apiDefinition.setRequest(JSONObject.toJSONString(request));
                 results.add(apiDefinition);
             });
@@ -84,6 +89,36 @@ public class MsParser extends ApiImportAbstractParser {
         return apiImport;
     }
 
+    private void parsePath(MsHTTPSamplerProxy request, ApiDefinitionResult apiDefinition) {
+        if (StringUtils.isNotBlank(request.getPath())) {
+            String[] split = request.getPath().split("\\?");
+            String path = split[0];
+            parseQueryParameters(split, request.getArguments());
+            request.setPath(path);
+            apiDefinition.setPath(path);
+        } else {
+            request.setPath("/");
+            apiDefinition.setPath("/");
+        }
+        apiDefinition.setName(apiDefinition.getPath() + " [" + apiDefinition.getMethod() + "]");
+    }
+
+    private void parseQueryParameters(String[] split, List<KeyValue> arguments) {
+        if (split.length > 1) {
+            try {
+                String queryParams = split[1];
+                queryParams = URLDecoder.decode(queryParams, "UTF-8");
+                String[] params = queryParams.split("&");
+                for (String param : params) {
+                    String[] kv = param.split("=");
+                    arguments.add(new KeyValue(kv[0], kv[1]));
+                }
+            } catch (UnsupportedEncodingException e) {
+                LogUtil.info(e.getMessage(), e);
+                return;
+            }
+        }
+    }
     private void parseHeader(JSONObject requestObject, List<KeyValue> msHeaders) {
         JSONArray headers = requestObject.getJSONArray("headers");
         if (CollectionUtils.isNotEmpty(headers)) {
@@ -118,6 +153,30 @@ public class MsParser extends ApiImportAbstractParser {
                     msBody.setKvs(kvs);
                     msBody.setType(Body.WWW_FROM);
                 }
+            }
+        }
+    }
+
+
+    private void parseModule(ApiDefinitionResult apiDefinition, ApiTestImportRequest importRequest) {
+        String modulePath = apiDefinition.getModulePath();
+        if (StringUtils.isBlank(modulePath)) {
+            return;
+        }
+        if (modulePath.startsWith("/")) {
+            modulePath = modulePath.substring(1, modulePath.length());
+        }
+        if (modulePath.endsWith("/")) {
+            modulePath = modulePath.substring(0, modulePath.length() - 1);
+        }
+        List<String> modules = Arrays.asList(modulePath.split("/"));
+        ApiModule parent = getSelectModule(importRequest.getModuleId());
+        Iterator<String> iterator = modules.iterator();
+        while (iterator.hasNext()) {
+            String item = iterator.next();
+            parent = buildModule(parent, item, importRequest.isSaved());
+            if (!iterator.hasNext()) {
+                apiDefinition.setModuleId(parent.getId());
             }
         }
     }

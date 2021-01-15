@@ -39,9 +39,7 @@ public class TestPlan implements Serializable {
 
     private String creator;
 
-    private String apiIds;
-
-    private String scenarioIds;
+    private String projectId;
 
     private String tags;
 

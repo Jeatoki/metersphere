@@ -9,6 +9,8 @@ import io.metersphere.base.domain.UserExample;
 import io.metersphere.base.mapper.ScheduleMapper;
 import io.metersphere.base.mapper.UserMapper;
 import io.metersphere.base.mapper.ext.ExtScheduleMapper;
+import io.metersphere.commons.constants.ScheduleGroup;
+import io.metersphere.commons.constants.ScheduleType;
 import io.metersphere.commons.exception.MSException;
 import io.metersphere.commons.utils.DateUtils;
 import io.metersphere.commons.utils.LogUtil;
@@ -17,8 +19,10 @@ import io.metersphere.commons.utils.SessionUtils;
 import io.metersphere.controller.request.OrderRequest;
 import io.metersphere.controller.request.QueryScheduleRequest;
 import io.metersphere.dto.ScheduleDao;
+import io.metersphere.job.sechedule.ApiScenarioTestJob;
 import io.metersphere.job.sechedule.ApiTestJob;
 import io.metersphere.job.sechedule.ScheduleManager;
+import io.metersphere.job.sechedule.TestPlanTestJob;
 import org.apache.commons.lang3.StringUtils;
 import org.quartz.JobKey;
 import org.quartz.SchedulerException;
@@ -64,6 +68,7 @@ public class ScheduleService {
     }
 
     public Schedule getScheduleByResource(String resourceId, String group) {
+
         ScheduleExample example = new ScheduleExample();
         example.createCriteria().andResourceIdEqualTo(resourceId).andGroupEqualTo(group);
         List<Schedule> schedules = scheduleMapper.selectByExample(example);
@@ -166,11 +171,11 @@ public class ScheduleService {
         });
     }
 
-    public long countTaskByWorkspaceIdAndGroup(String workspaceId,String group) {
-        return  extScheduleMapper.countTaskByWorkspaceIdAndGroup(workspaceId,group);
+    public long countTaskByProjectId(String projectId) {
+        return  extScheduleMapper.countTaskByProjectId(projectId);
     }
 
-    public long countTaskByWorkspaceIdAndGroupInThisWeek(String workspaceID, String group) {
+    public long countTaskByProjectIdInThisWeek(String projectId) {
         Map<String, Date> startAndEndDateInWeek = DateUtils.getWeedFirstTimeAndLastTime(new Date());
 
         Date firstTime = startAndEndDateInWeek.get("firstTime");
@@ -179,12 +184,62 @@ public class ScheduleService {
         if(firstTime==null || lastTime == null){
             return  0;
         }else {
-            return extScheduleMapper.countTaskByWorkspaceIdAndGroupAndCreateTimeRange(workspaceID,group,firstTime.getTime(),lastTime.getTime());
+            return extScheduleMapper.countTaskByProjectIdAndCreateTimeRange(projectId,firstTime.getTime(),lastTime.getTime());
         }
     }
 
-    public List<TaskInfoResult> findRunningTaskInfoByWorkspaceID(String workspaceID) {
-        List<TaskInfoResult> runningTaskInfoList = extScheduleMapper.findRunningTaskInfoByWorkspaceID(workspaceID);
+    public List<TaskInfoResult> findRunningTaskInfoByProjectID(String projectID) {
+        List<TaskInfoResult> runningTaskInfoList = extScheduleMapper.findRunningTaskInfoByProjectID(projectID);
         return  runningTaskInfoList;
+    }
+
+    public void createSchedule(Schedule request) {
+        Schedule schedule = this.buildApiTestSchedule(request);
+        schedule.setJob(ApiScenarioTestJob.class.getName());
+
+        JobKey jobKey = null;
+        TriggerKey triggerKey = null;
+        Class clazz = null;
+        if("testPlan".equals(request.getScheduleFrom())){
+            schedule.setGroup(ScheduleGroup.TEST_PLAN_TEST.name());
+            schedule.setType(ScheduleType.CRON.name());
+            jobKey = TestPlanTestJob.getJobKey(request.getResourceId());
+            triggerKey = TestPlanTestJob.getTriggerKey(request.getResourceId());
+            clazz = TestPlanTestJob.class;
+        }else {
+            //默认为情景
+            schedule.setGroup(ScheduleGroup.API_SCENARIO_TEST.name());
+            schedule.setType(ScheduleType.CRON.name());
+            jobKey = ApiScenarioTestJob.getJobKey(request.getResourceId());
+            triggerKey = ApiScenarioTestJob.getTriggerKey(request.getResourceId());
+            clazz = ApiScenarioTestJob.class;
+        }
+        this.addSchedule(schedule);
+
+        this.addOrUpdateCronJob(request,jobKey ,triggerKey , clazz);
+    }
+
+    public void updateSchedule(Schedule request) {
+        this.editSchedule(request);
+
+        JobKey jobKey = null;
+        TriggerKey triggerKey = null;
+        Class clazz = null;
+        if(ScheduleGroup.TEST_PLAN_TEST.name().equals(request.getGroup())){
+            jobKey = TestPlanTestJob.getJobKey(request.getResourceId());
+            triggerKey = TestPlanTestJob.getTriggerKey(request.getResourceId());
+            clazz = TestPlanTestJob.class;
+        }else {
+            //默认为情景
+            jobKey = ApiScenarioTestJob.getJobKey(request.getResourceId());
+            triggerKey = ApiScenarioTestJob.getTriggerKey(request.getResourceId());
+            clazz = ApiScenarioTestJob.class;
+        }
+
+        this.addOrUpdateCronJob(request,jobKey ,triggerKey , clazz);
+    }
+
+    public Object getCurrentlyExecutingJobs() {
+        return scheduleManager.getCurrentlyExecutingJobs();
     }
 }

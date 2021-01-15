@@ -1,5 +1,6 @@
 package io.metersphere.api.dto.definition.request;
 
+import com.alibaba.fastjson.JSONObject;
 import com.alibaba.fastjson.annotation.JSONField;
 import com.alibaba.fastjson.annotation.JSONType;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
@@ -11,6 +12,7 @@ import io.metersphere.api.dto.definition.request.assertions.MsAssertions;
 import io.metersphere.api.dto.definition.request.auth.MsAuthManager;
 import io.metersphere.api.dto.definition.request.configurations.MsHeaderManager;
 import io.metersphere.api.dto.definition.request.controller.MsIfController;
+import io.metersphere.api.dto.definition.request.controller.MsLoopController;
 import io.metersphere.api.dto.definition.request.extract.MsExtract;
 import io.metersphere.api.dto.definition.request.processors.MsJSR223Processor;
 import io.metersphere.api.dto.definition.request.processors.post.MsJSR223PostProcessor;
@@ -20,13 +22,20 @@ import io.metersphere.api.dto.definition.request.sampler.MsHTTPSamplerProxy;
 import io.metersphere.api.dto.definition.request.sampler.MsJDBCSampler;
 import io.metersphere.api.dto.definition.request.sampler.MsTCPSampler;
 import io.metersphere.api.dto.definition.request.timer.MsConstantTimer;
+import io.metersphere.api.dto.scenario.KeyValue;
+import io.metersphere.api.dto.scenario.environment.EnvironmentConfig;
 import io.metersphere.api.service.ApiDefinitionService;
+import io.metersphere.api.service.ApiTestEnvironmentService;
 import io.metersphere.base.domain.ApiDefinitionWithBLOBs;
+import io.metersphere.base.domain.ApiTestEnvironmentWithBLOBs;
 import io.metersphere.commons.utils.CommonBeanFactory;
 import io.metersphere.commons.utils.LogUtil;
 import lombok.Data;
+import org.apache.commons.collections.CollectionUtils;
+import org.apache.jmeter.config.Arguments;
 import org.apache.jmeter.protocol.http.control.AuthManager;
 import org.apache.jmeter.save.SaveService;
+import org.apache.jmeter.testelement.TestElement;
 import org.apache.jorphan.collections.HashTree;
 import org.apache.jorphan.collections.ListedHashTree;
 
@@ -52,11 +61,12 @@ import java.util.List;
         @JsonSubTypes.Type(value = MsConstantTimer.class, name = "ConstantTimer"),
         @JsonSubTypes.Type(value = MsIfController.class, name = "IfController"),
         @JsonSubTypes.Type(value = MsScenario.class, name = "scenario"),
+        @JsonSubTypes.Type(value = MsLoopController.class, name = "LoopController"),
 
 })
 @JSONType(seeAlso = {MsHTTPSamplerProxy.class, MsHeaderManager.class, MsJSR223Processor.class, MsJSR223PostProcessor.class,
         MsJSR223PreProcessor.class, MsTestPlan.class, MsThreadGroup.class, AuthManager.class, MsAssertions.class,
-        MsExtract.class, MsTCPSampler.class, MsDubboSampler.class, MsJDBCSampler.class, MsConstantTimer.class, MsIfController.class, MsScenario.class}, typeKey = "type")
+        MsExtract.class, MsTCPSampler.class, MsDubboSampler.class, MsJDBCSampler.class, MsConstantTimer.class, MsIfController.class, MsScenario.class, MsLoopController.class}, typeKey = "type")
 @Data
 public abstract class MsTestElement {
     private String type;
@@ -77,7 +87,7 @@ public abstract class MsTestElement {
     @JSONField(ordinal = 8)
     private boolean enable = true;
     @JSONField(ordinal = 9)
-    private String refType ;
+    private String refType;
     @JSONField(ordinal = 10)
     private LinkedList<MsTestElement> hashTree;
 
@@ -97,7 +107,6 @@ public abstract class MsTestElement {
     public String getJmx(HashTree hashTree) {
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
             SaveService.saveTree(hashTree, baos);
-            System.out.print(baos.toString());
             return baos.toString();
         } catch (Exception e) {
             e.printStackTrace();
@@ -124,12 +133,38 @@ public abstract class MsTestElement {
             ObjectMapper mapper = new ObjectMapper();
             mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
             ApiDefinitionWithBLOBs apiDefinition = apiDefinitionService.getBLOBs(this.getId());
-            element = mapper.readValue(apiDefinition.getRequest(), new TypeReference<MsTestElement>() {
-            });
-            hashTree.add(element);
+            if (apiDefinition != null) {
+                element = mapper.readValue(apiDefinition.getRequest(), new TypeReference<MsTestElement>() {
+                });
+                hashTree.add(element);
+            }
         } catch (Exception ex) {
             ex.printStackTrace();
         }
+    }
+
+    public Arguments addArguments(ParameterConfig config) {
+        Arguments arguments = new Arguments();
+        if (config != null && config.getConfig() != null && config.getConfig().getCommonConfig() != null
+                && CollectionUtils.isNotEmpty(config.getConfig().getCommonConfig().getVariables())) {
+            arguments.setEnabled(true);
+            arguments.setName(name + "Variables");
+            arguments.setProperty(TestElement.TEST_CLASS, Arguments.class.getName());
+            arguments.setProperty(TestElement.GUI_CLASS, SaveService.aliasToClass("ArgumentsPanel"));
+            config.getConfig().getCommonConfig().getVariables().stream().filter(KeyValue::isValid).filter(KeyValue::isEnable).forEach(keyValue ->
+                    arguments.addArgument(keyValue.getName(), keyValue.getValue(), "=")
+            );
+        }
+        return arguments;
+    }
+
+    protected EnvironmentConfig getEnvironmentConfig(String environmentId) {
+        ApiTestEnvironmentService environmentService = CommonBeanFactory.getBean(ApiTestEnvironmentService.class);
+        ApiTestEnvironmentWithBLOBs environment = environmentService.get(environmentId);
+        if (environment != null && environment.getConfig() != null) {
+            return JSONObject.parseObject(environment.getConfig(), EnvironmentConfig.class);
+        }
+        return null;
     }
 }
 

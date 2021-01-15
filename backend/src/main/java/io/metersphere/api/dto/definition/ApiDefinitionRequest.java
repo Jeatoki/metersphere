@@ -20,9 +20,14 @@ public class ApiDefinitionRequest {
     private String name;
     private String workspaceId;
     private String userId;
+    private String planId;
     private boolean recent = false;
     private List<OrderRequest> orders;
-    private List<String> filters;
+    private Map<String, List<String>> filters;
     private Map<String, Object> combine;
     private List<String> ids;
+    private boolean isSelectThisWeedData = false;
+    private long createTime = 0;
+    private String status;
+    private String apiCaseCoverage;
 }

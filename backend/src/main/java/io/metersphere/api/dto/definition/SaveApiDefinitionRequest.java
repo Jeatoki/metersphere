@@ -47,4 +47,6 @@ public class SaveApiDefinitionRequest {
     private String triggerMode;
 
     private List<String> bodyUploadIds;
+
+    private String tags;
 }

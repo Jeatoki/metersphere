@@ -69,23 +69,25 @@
         </div>
         <div v-if="!referenced">
           <div v-for="row in request.hashTree" :key="row.id">
-            <!-- 前置脚本 -->
-            <ms-jsr233-processor v-if="row.label ==='JSR223 PreProcessor'" @copyRow="copyRow" @remove="remove" :is-read-only="false" :title="$t('api_test.definition.request.pre_script')" style-type="color: #B8741A;background-color: #F9F1EA"
+            <!--前置脚本-->
+            <ms-jsr233-processor v-if="row.type==='JSR223PreProcessor'" @remove="remove" @copyRow="copyRow" :title="$t('api_test.definition.request.pre_script')"
                                  :jsr223-processor="row"/>
             <!--后置脚本-->
-            <ms-jsr233-processor v-if="row.label ==='JSR223 PostProcessor'" @copyRow="copyRow" @remove="remove" :is-read-only="false" :title="$t('api_test.definition.request.post_script')" style-type="color: #783887;background-color: #F2ECF3"
+            <ms-jsr233-processor v-if="row.label ==='JSR223 PostProcessor'" @copyRow="copyRow" @remove="remove" :is-read-only="false" :title="$t('api_test.definition.request.post_script')"
                                  :jsr223-processor="row"/>
             <!--断言规则-->
-            <ms-api-assertions v-if="row.type==='Assertions'" @copyRow="copyRow" @remove="remove" :is-read-only="isReadOnly" :assertions="row"/>
+            <div style="margin-top: 10px">
+              <ms-api-assertions :response="response" v-if="row.type==='Assertions'" @copyRow="copyRow" @remove="remove" :is-read-only="isReadOnly" :assertions="row"/>
+            </div>
             <!--提取规则-->
-            <ms-api-extract :is-read-only="isReadOnly" @copyRow="copyRow" @remove="remove" v-if="row.type==='Extract'" :extract="row"/>
+            <div style="margin-top: 10px">
+              <ms-api-extract :response="response" :is-read-only="isReadOnly" @copyRow="copyRow" @remove="remove" v-if="row.type==='Extract'" :extract="row"/>
+            </div>
           </div>
-
-
         </div>
       </el-col>
       <!--操作按钮-->
-      <el-col :span="3" class="ms-left-cell" v-if="!referenced">
+      <el-col :span="3" class="ms-left-cell" v-if="!referenced && showScript">
         <el-button class="ms-left-buttion" size="small" @click="addPre">+{{$t('api_test.definition.request.pre_script')}}</el-button>
         <br/>
         <el-button class="ms-left-buttion" size="small" @click="addPost">+{{$t('api_test.definition.request.post_script')}}</el-button>
@@ -106,7 +108,6 @@
   import ApiRequestMethodSelect from "../../collapse/ApiRequestMethodSelect";
   import {REQUEST_HEADERS} from "@/common/js/constants";
   import MsApiVariable from "../../ApiVariable";
-  import MsJsr233Processor from "../../processor/Jsr233Processor";
   import {createComponent} from "../../jmeter/components";
   import MsApiAssertions from "../../assertion/ApiAssertions";
   import MsApiExtract from "../../extract/ApiExtract";
@@ -114,6 +115,7 @@
   import {getUUID} from "@/common/js/utils";
   import BatchAddParameter from "../../basis/BatchAddParameter";
   import MsApiAdvancedConfig from "./ApiAdvancedConfig";
+  import MsJsr233Processor from "../../../../automation/scenario/Jsr233Processor";
 
   export default {
     name: "MsApiHttpRequestForm",
@@ -131,6 +133,8 @@
     },
     props: {
       request: {},
+      response: {},
+      showScript: Boolean,
       headers: {
         type: Array,
         default() {

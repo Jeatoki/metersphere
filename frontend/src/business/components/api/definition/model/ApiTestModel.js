@@ -596,9 +596,11 @@ export class TCPRequest extends Request {
     super(RequestFactory.TYPES.TCP, options);
     this.useEnvironment = options.useEnvironment;
     this.debugReport = undefined;
+    this.parameters = [];
 
     //设置TCPConfig的属性
     this.set(new TCPConfig(options));
+    this.sets({parameters: KeyValue}, options);
 
     this.request = options.request;
   }
@@ -842,7 +844,7 @@ export class JSR223Processor extends BaseConfig {
     this.active = false;
     this.type = "JSR223Processor";
     this.script = undefined;
-    this.language = "beanshell";
+    this.scriptLanguage = "beanshell";
     this.enable = true;
     this.hashTree = [];
     this.set(options);
@@ -1015,6 +1017,38 @@ export class IfController extends Controller {
     return "";
   }
 }
+
+export class LoopController extends Controller {
+  constructor(options = {}) {
+    super("LoopController", options);
+    this.type = "LoopController";
+    this.active = false;
+    this.loopType = "LOOP_COUNT";
+    this.countController = {loops: 0, interval: 0, proceed: false};
+    this.forEachController = {inputVal: "", returnVal: "", interval: 0};
+    this.whileController = {variable: "", operator: "", value: "", timeout: 0};
+    this.hashTree = [];
+    this.set(options);
+  }
+
+  isValid() {
+    if (!!this.operator && this.operator.indexOf("empty") > 0) {
+      return !!this.variable && !!this.operator;
+    }
+    return !!this.variable && !!this.operator && !!this.value;
+  }
+
+  label() {
+    if (this.isValid()) {
+      let label = this.variable;
+      if (this.operator) label += " " + this.operator;
+      if (this.value) label += " " + this.value;
+      return label;
+    }
+    return "";
+  }
+}
+
 
 export class Timer extends BaseConfig {
   static TYPES = {

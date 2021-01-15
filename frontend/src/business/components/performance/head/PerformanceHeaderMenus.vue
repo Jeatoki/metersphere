@@ -2,7 +2,7 @@
   <div id="menu-bar">
     <el-row type="flex">
       <project-change :project-name="currentProject"/>
-      <el-col :span="12">
+      <el-col :span="9">
         <el-menu class="header-menu" :unique-opened="true" mode="horizontal" router :default-active='$route.path'>
           <el-menu-item :index="'/performance/home'">
             {{ $t("i18n.home") }}
@@ -32,7 +32,7 @@
           <ms-create-test :to="'/performance/test/create'"/>
         </el-row>
       </el-col>
-      <el-col :span="10"/>
+      <el-col :span="11"/>
     </el-row>
   </div>
 </template>
@@ -84,7 +84,6 @@ export default {
   methods: {
     registerEvents() {
       PerformanceEvent.$on(LIST_CHANGE, () => {
-        // // todo 这里偶尔会有 refs 为空的情况
         this.$refs.testRecent.recent();
         this.$refs.reportRecent.recent();
       });
@@ -92,6 +91,9 @@ export default {
   },
   mounted() {
     this.registerEvents();
+  },
+  beforeDestroy() {
+    PerformanceEvent.$off(LIST_CHANGE);
   }
 }
 

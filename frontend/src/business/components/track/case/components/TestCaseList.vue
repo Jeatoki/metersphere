@@ -25,7 +25,7 @@
 
       </template>
 
-      <test-case-import @refresh="refresh" ref="testCaseImport"/>
+      <test-case-import @refreshAll="refreshAll" ref="testCaseImport"/>
 
       <el-table
         border
@@ -111,6 +111,14 @@
           </template>
         </el-table-column>
 
+        <el-table-column prop="tags" :label="$t('commons.tag')">
+          <template v-slot:default="scope">
+            <div v-for="(itemName,index)  in scope.row.tags" :key="index">
+              <ms-tag type="success" effect="plain" :content="itemName"/>
+            </div>
+          </template>
+        </el-table-column>
+
         <el-table-column
           prop="nodePath"
           :label="$t('test_track.case.module')"
@@ -175,6 +183,7 @@ import StatusTableItem from "@/business/components/track/common/tableItems/planv
 import TestCaseDetail from "./TestCaseDetail";
 import ReviewStatus from "@/business/components/track/case/components/ReviewStatus";
 import {getCurrentProjectID} from "../../../../../common/js/utils";
+import MsTag from "@/business/components/common/components/MsTag";
 
 export default {
   name: "TestCaseList",
@@ -195,7 +204,8 @@ export default {
     BatchEdit,
     StatusTableItem,
     TestCaseDetail,
-    ReviewStatus
+    ReviewStatus,
+    MsTag,
   },
   data() {
     return {
@@ -308,6 +318,11 @@ export default {
           this.tableData = data.listObject;
           // this.selectIds.clear();
           this.selectRows.clear();
+          this.tableData.forEach(item => {
+            if (item.tags && item.tags.length > 0) {
+              item.tags = JSON.parse(item.tags);
+            }
+          })
         });
       }
     },
@@ -374,6 +389,10 @@ export default {
       this.selectRows.clear();
       this.$emit('refresh');
     },
+    refreshAll() {
+      this.selectRows.clear();
+      this.$emit('refreshAll');
+    },
     showDetail(row, event, column) {
       this.$emit('testCaseDetail', row);
     },
@@ -400,9 +419,17 @@ export default {
       }
     },
     importTestCase() {
+      if (!getCurrentProjectID()) {
+        this.$warning(this.$t('commons.check_project_tip'));
+        return;
+      }
       this.$refs.testCaseImport.open();
     },
     exportTestCase() {
+      if (!getCurrentProjectID()) {
+        this.$warning(this.$t('commons.check_project_tip'));
+        return;
+      }
       let ids = Array.from(this.selectRows).map(row => row.id);
       let config = {
         url: '/test/case/export/testcase',
@@ -525,4 +552,7 @@ export default {
   cursor: pointer;
 }
 
+.el-tag {
+  margin-left: 10px;
+}
 </style>

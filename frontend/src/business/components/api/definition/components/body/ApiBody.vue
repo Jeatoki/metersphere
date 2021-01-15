@@ -1,5 +1,5 @@
 <template>
-  <div style="min-width: 1000px;margin-bottom: 20px">
+  <div>
     <el-radio-group v-model="body.type" size="mini">
       <el-radio :disabled="isReadOnly" :label="type.FORM_DATA" @change="modeChange">
         {{ $t('api_test.definition.request.body_form_data') }}
@@ -28,26 +28,26 @@
     <el-row v-if="body.type == 'Form Data' || body.type == 'WWW_FORM'">
       <el-link class="ms-el-link" @click="batchAdd"> {{$t("commons.batch_add")}}</el-link>
     </el-row>
+    <div style="min-width: 1200px;" v-if="body.type == 'Form Data' || body.type == 'WWW_FORM'">
+      <ms-api-variable :is-read-only="isReadOnly"
+                       :parameters="body.kvs"
+                       :isShowEnable="isShowEnable" type="body" v-if="body.type == 'Form Data'"/>
 
-    <ms-api-variable :is-read-only="isReadOnly"
-                     :parameters="body.kvs"
-                     :isShowEnable="isShowEnable"
-                     type="body"
-                     v-if="body.type == 'Form Data'"/>
-
-    <ms-api-from-url-variable :is-read-only="isReadOnly"
-                              :parameters="body.kvs"
-                              type="body"
-                              v-if="body.type == 'WWW_FORM'"/>
-
-    <div class="ms-body" v-if="body.type == 'JSON'">
-      <ms-json-code-edit @json-change="jsonChange" @onError="jsonError" :value="body.raw" ref="jsonCodeEdit"/>
+      <ms-api-from-url-variable :is-read-only="isReadOnly"
+                                :parameters="body.kvs"
+                                type="body" v-if="body.type == 'WWW_FORM'"/>
+    </div>
+    <div v-if="body.type == 'JSON'">
+      <div style="padding: 10px">
+        <el-switch active-text="JSON-SCHEMA" v-model="body.format" active-value="JSON-SCHEMA"/>
+      </div>
+      <ms-json-code-edit v-if="body.format==='JSON-SCHEMA'" :body="body" ref="jsonCodeEdit"/>
+      <ms-code-edit v-else :read-only="isReadOnly" height="400px" :data.sync="body.raw" :modes="modes" :mode="'json'" ref="codeEdit"/>
     </div>
 
     <div class="ms-body" v-if="body.type == 'XML'">
       <ms-code-edit :read-only="isReadOnly" :data.sync="body.raw" :modes="modes" :mode="'xml'" ref="codeEdit"/>
     </div>
-
 
     <div class="ms-body" v-if="body.type == 'Raw'">
       <ms-code-edit :read-only="isReadOnly" :data.sync="body.raw" :modes="modes" ref="codeEdit"/>
@@ -68,8 +68,7 @@
   import MsApiKeyValue from "../ApiKeyValue";
   import {BODY_TYPE, KeyValue} from "../../model/ApiTestModel";
   import MsCodeEdit from "../../../../common/components/MsCodeEdit";
-  import MsJsonCodeEdit from "../../../../common/components/MsJsonCodeEdit";
-
+  import MsJsonCodeEdit from "../../../../common/json-schema/JsonSchemaEditor";
   import MsDropdown from "../../../../common/components/MsDropdown";
   import MsApiVariable from "../ApiVariable";
   import MsApiBinaryVariable from "./ApiBinaryVariable";
@@ -103,10 +102,10 @@
     data() {
       return {
         type: BODY_TYPE,
-        modes: ['text', 'json', 'xml', 'html']
+        modes: ['text', 'json', 'xml', 'html'],
+        jsonSchema: "JSON",
       };
     },
-
     methods: {
       modeChange(mode) {
         switch (this.body.type) {
@@ -149,12 +148,6 @@
             return;
           }
         }
-      },
-      jsonChange(json) {
-        this.body.raw = JSON.stringify(json);
-      },
-      jsonError(e) {
-        this.$error(e);
       },
       batchAdd() {
         this.$refs.batchAddParameter.open();

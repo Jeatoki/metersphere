@@ -2,17 +2,24 @@ package io.metersphere.api.controller;
 
 import com.github.pagehelper.Page;
 import com.github.pagehelper.PageHelper;
+import io.metersphere.api.dto.JmxInfoDTO;
 import io.metersphere.api.dto.automation.*;
 import io.metersphere.api.dto.definition.RunDefinitionRequest;
 import io.metersphere.api.service.ApiAutomationService;
 import io.metersphere.base.domain.ApiScenario;
 import io.metersphere.base.domain.ApiScenarioWithBLOBs;
+import io.metersphere.base.domain.Schedule;
 import io.metersphere.commons.constants.RoleConstants;
 import io.metersphere.commons.utils.PageUtils;
 import io.metersphere.commons.utils.Pager;
 import io.metersphere.commons.utils.SessionUtils;
+import io.metersphere.track.request.testcase.ApiCaseRelevanceRequest;
+import io.metersphere.track.request.testplan.FileOperationRequest;
 import org.apache.shiro.authz.annotation.Logical;
 import org.apache.shiro.authz.annotation.RequiresRoles;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -28,6 +35,7 @@ public class ApiAutomationController {
     ApiAutomationService apiAutomationService;
 
     @PostMapping("/list/{goPage}/{pageSize}")
+    @RequiresRoles(value = {RoleConstants.TEST_MANAGER, RoleConstants.TEST_USER, RoleConstants.TEST_VIEWER}, logical = Logical.OR)
     public Pager<List<ApiScenarioDTO>> list(@PathVariable int goPage, @PathVariable int pageSize, @RequestBody ApiScenarioRequest request) {
         Page<Object> page = PageHelper.startPage(goPage, pageSize, true);
         request.setWorkspaceId(SessionUtils.getCurrentWorkspaceId());
@@ -77,14 +85,21 @@ public class ApiAutomationController {
     @PostMapping(value = "/run/debug")
     public void runDebug(@RequestPart("request") RunDefinitionRequest request, @RequestPart(value = "files") List<MultipartFile> bodyFiles) {
         request.setExecuteType(ExecuteType.Debug.name());
-        apiAutomationService.run(request, bodyFiles);
+        apiAutomationService.debugRun(request, bodyFiles);
     }
 
     @PostMapping(value = "/run")
-    public void run(@RequestBody RunScenarioRequest request) {
+    public String run(@RequestBody RunScenarioRequest request) {
         request.setExecuteType(ExecuteType.Completed.name());
-        apiAutomationService.run(request);
+        return apiAutomationService.run(request);
     }
+
+    @PostMapping(value = "/run/batch")
+    public String runBatch(@RequestBody RunScenarioRequest request) {
+        request.setExecuteType(ExecuteType.Saved.name());
+        return apiAutomationService.run(request);
+    }
+
 
     @PostMapping("/getReference")
     public ReferenceDTO getReference(@RequestBody ApiScenarioRequest request) {
@@ -96,5 +111,34 @@ public class ApiAutomationController {
         return apiAutomationService.addScenarioToPlan(request);
     }
 
+    @PostMapping("/relevance")
+    public void testPlanRelevance(@RequestBody ApiCaseRelevanceRequest request) {
+        apiAutomationService.relevance(request);
+    }
+
+    @PostMapping(value = "/schedule/update")
+    public void updateSchedule(@RequestBody Schedule request) {
+        apiAutomationService.updateSchedule(request);
+    }
+
+    @PostMapping(value = "/schedule/create")
+    public void createSchedule(@RequestBody Schedule request) {
+        apiAutomationService.createSchedule(request);
+    }
+
+    @PostMapping(value = "/genPerformanceTestJmx")
+    public JmxInfoDTO genPerformanceTestJmx(@RequestBody RunScenarioRequest runRequest) {
+        runRequest.setExecuteType(ExecuteType.Completed.name());
+        return apiAutomationService.genPerformanceTestJmx(runRequest);
+    }
+
+    @PostMapping("/file/download")
+    public ResponseEntity<byte[]> download(@RequestBody FileOperationRequest fileOperationRequest) {
+        byte[] bytes = apiAutomationService.loadFileAsBytes(fileOperationRequest);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("application/octet-stream"))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileOperationRequest.getName() + "\"")
+                .body(bytes);
+    }
 }
 

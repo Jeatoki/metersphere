@@ -20,7 +20,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 
 import javax.annotation.Resource;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -43,6 +42,11 @@ public class ShiroDBRealm extends AuthorizingRealm {
 
     @Value("${run.mode:release}")
     private String runMode;
+
+    @Override
+    public String getName() {
+        return "LOCAL";
+    }
 
     /**
      * 权限认证
@@ -85,10 +89,6 @@ public class ShiroDBRealm extends AuthorizingRealm {
             return loginLocalMode(userId, password);
         }
 
-        if (StringUtils.equals(login, UserSource.LDAP.name())) {
-            return loginLdapMode(userId, password);
-        }
-
         UserDTO user = getUserWithOutAuthenticate(userId);
         userId = user.getId();
         SessionUser sessionUser = SessionUser.fromUser(user);
@@ -109,28 +109,6 @@ public class ShiroDBRealm extends AuthorizingRealm {
             }
         }
         return user;
-    }
-
-
-    private AuthenticationInfo loginLdapMode(String userId, String password) {
-        // userId 或 email 有一个相同就返回User
-        String email = (String) SecurityUtils.getSubject().getSession().getAttribute("email");
-        UserDTO user = userService.getLoginUser(userId, Arrays.asList(UserSource.LDAP.name(), UserSource.LOCAL.name()));
-        String msg;
-        if (user == null) {
-            user = userService.getUserDTOByEmail(email, UserSource.LDAP.name(), UserSource.LOCAL.name());
-            if (user == null) {
-                msg = "The user does not exist: " + userId;
-                logger.warn(msg);
-                throw new UnknownAccountException(Translator.get("user_not_exist") + userId);
-            }
-            userId = user.getId();
-        }
-
-        SessionUser sessionUser = SessionUser.fromUser(user);
-        SessionUtils.putUser(sessionUser);
-        return new SimpleAuthenticationInfo(userId, password, getName());
-
     }
 
     private AuthenticationInfo loginLocalMode(String userId, String password) {

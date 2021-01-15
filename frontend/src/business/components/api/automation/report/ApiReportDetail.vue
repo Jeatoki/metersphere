@@ -9,14 +9,21 @@
           <main v-if="this.isNotRunning">
             <ms-metric-chart :content="content" :totalTime="totalTime"/>
             <div>
-              <ms-scenario-results :scenarios="content.scenarios" v-on:requestResult="requestResult"/>
+              <!--<ms-scenario-results :scenarios="content.scenarios" v-on:requestResult="requestResult"/>-->
+
+              <el-tabs v-model="activeName" @tab-click="handleClick">
+                <el-tab-pane :label="$t('api_report.total')" name="total">
+                  <ms-scenario-results :scenarios="content.scenarios" v-on:requestResult="requestResult"/>
+                </el-tab-pane>
+                <el-tab-pane name="fail">
+                  <template slot="label">
+                    <span class="fail">{{ $t('api_report.fail') }}</span>
+                  </template>
+                  <ms-scenario-results v-on:requestResult="requestResult" :scenarios="fails"/>
+                </el-tab-pane>
+              </el-tabs>
+
             </div>
-            <!--<el-collapse-transition>-->
-              <!--<div v-show="isActive" style="width: 99%">-->
-                <!--<ms-request-result-tail v-if="isRequestResult" :request-type="requestType" :request="request"-->
-                                        <!--:scenario-name="scenarioName"/>-->
-              <!--</div>-->
-            <!--</el-collapse-transition>-->
             <ms-api-report-export v-if="reportExportVisible" id="apiTestReport" :title="report.testName"
                                   :content="content" :total-time="totalTime"/>
           </main>
@@ -38,7 +45,7 @@
   import MsApiReportExport from "./ApiReportExport";
   import MsApiReportViewHeader from "./ApiReportViewHeader";
   import {RequestFactory} from "../../definition/model/ApiTestModel";
-  import {windowPrint} from "@/common/js/utils";
+  import {windowPrint, getCurrentProjectID} from "@/common/js/utils";
 
   export default {
     name: "MsApiReport",
@@ -96,7 +103,7 @@
       getReport() {
         this.init();
         if (this.reportId) {
-          let url = "/api/scenario/report/get/" + this.reportId + "/" + this.infoDb;
+          let url = "/api/scenario/report/get/" + this.reportId;
           this.$get(url, response => {
             this.report = response.data || {};
             if (response.data) {
@@ -166,16 +173,9 @@
           this.$warning(this.$t('api_test.automation.report_name_info'));
           return;
         }
-        if (!this.currentProjectId) {
-          this.$warning(this.$t('api_test.select_project'));
-          return;
-        }
         this.loading = true;
-        this.report.projectId = this.currentProjectId;
-        let url = "/api/scenario/report/add";
-        if (this.infoDb === true) {
-          url = "/api/scenario/report/update";
-        }
+        this.report.projectId = getCurrentProjectID();
+        let url = "/api/scenario/report/update";
         this.result = this.$post(url, this.report, response => {
           this.$success(this.$t('commons.save_success'));
           this.loading = false;

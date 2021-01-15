@@ -66,7 +66,7 @@ public class JMeterService {
         }
     }
 
-    private HashTree getHashTree(Object scriptWrapper) throws Exception {
+    public static HashTree getHashTree(Object scriptWrapper) throws Exception {
         Field field = scriptWrapper.getClass().getDeclaredField("testPlan");
         field.setAccessible(true);
         return (HashTree) field.get(scriptWrapper);
@@ -91,7 +91,6 @@ public class JMeterService {
     public void runDefinition(String testId, HashTree testPlan, String debugReportId, String runMode) {
         try {
             init();
-            JMeterVars.addJSR223PostProcessor(testPlan);
             addBackendListener(testId, debugReportId, runMode, testPlan);
             LocalRunner runner = new LocalRunner(testPlan);
             runner.run();

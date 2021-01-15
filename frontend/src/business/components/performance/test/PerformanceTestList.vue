@@ -14,6 +14,12 @@
                   @row-click="link"
         >
           <el-table-column
+            prop="num"
+            label="ID"
+            width="100"
+            show-overflow-tooltip>
+          </el-table-column>
+          <el-table-column
             prop="name"
             :label="$t('commons.name')"
             width="150"
@@ -27,6 +33,9 @@
           </el-table-column>
           <el-table-column
             prop="userName"
+            sortable="custom"
+            :filters="userFilters"
+            column-key="user_id"
             :label="$t('load_test.user_name')"
             width="150"
             show-overflow-tooltip>
@@ -80,10 +89,11 @@ import MsContainer from "../../common/components/MsContainer";
 import MsMainContainer from "../../common/components/MsMainContainer";
 import MsPerformanceTestStatus from "./PerformanceTestStatus";
 import MsTableOperators from "../../common/components/MsTableOperators";
-import {_filter, _sort} from "@/common/js/utils";
+import {_filter, _sort, getCurrentProjectID} from "@/common/js/utils";
 import MsTableHeader from "../../common/components/MsTableHeader";
 import {TEST_CONFIGS} from "../../common/components/search/search-components";
 import {LIST_CHANGE, PerformanceEvent} from "@/business/components/common/head/ListEvent";
+import {WORKSPACE_ID} from "@/common/js/constants";
 
 export default {
   components: {
@@ -107,7 +117,7 @@ export default {
       tableData: [],
       multipleSelection: [],
       currentPage: 1,
-      pageSize: 5,
+      pageSize: 10,
       total: 0,
       loading: false,
       testId: null,
@@ -130,7 +140,8 @@ export default {
         {text: 'Reporting', value: 'Reporting'},
         {text: 'Completed', value: 'Completed'},
         {text: 'Error', value: 'Error'}
-      ]
+      ],
+      userFilters: [],
     }
   },
   watch: {
@@ -142,13 +153,24 @@ export default {
   created: function () {
     this.projectId = this.$route.params.projectId;
     this.initTableData();
+    this.getMaintainerOptions();
   },
   methods: {
+    getMaintainerOptions() {
+      let workspaceId = localStorage.getItem(WORKSPACE_ID);
+      this.$post('/user/ws/member/tester/list', {workspaceId: workspaceId}, response => {
+        this.userFilters = response.data.map(u => {
+          return {text: u.name, value: u.id}
+        });
+      });
+    },
     initTableData() {
       if (this.projectId !== 'all') {
         this.condition.projectId = this.projectId;
+        if (!this.condition.projectId) {
+          return;
+        }
       }
-
       this.result = this.$post(this.buildPagePath(this.queryPath), this.condition, response => {
         let data = response.data;
         this.total = data.itemCount;
@@ -211,6 +233,10 @@ export default {
       })
     },
     create() {
+      if (!getCurrentProjectID()) {
+        this.$warning(this.$t('commons.check_project_tip'));
+        return;
+      }
       this.$router.push('/performance/test/create');
     }
   }

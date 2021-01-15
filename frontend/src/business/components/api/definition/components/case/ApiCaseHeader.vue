@@ -18,31 +18,41 @@
         </el-col>
         <el-col :span="3">
           <div>
-            <el-select size="small" :placeholder="$t('api_test.definition.request.grade_info')" v-model="condition.priority"
+            <el-select size="small" :placeholder="$t('api_test.definition.request.grade_order_asc')" v-model="condition.order"
                        :disabled="isCaseEdit"
-                       class="ms-api-header-select" @change="getApiTest" clearable>
-              <el-option v-for="grd in priorities" :key="grd.id" :label="grd.name" :value="grd.id"/>
+                       class="ms-api-header-select" @change="search" clearable>
+              <el-option v-for="grd in priorities" :key="grd.id" :label="$t(grd.label)" :value="grd.id"/>
             </el-select>
           </div>
         </el-col>
+
+        <el-col :span="4">
+          <div class="ms-api-header-select" style="margin-right: 20px">
+            <el-row>
+              <el-col :span="12">
+                <el-input size="small" :placeholder="$t('api_test.definition.request.select_case')"
+                          :disabled="isCaseEdit"
+                          v-model="condition.name" @blur="search" @keyup.enter.native="search"/>
+              </el-col>
+              <el-col :span="12">
+                <el-link type="primary" style="margin-left: 5px" @click="open">{{$t('commons.adv_search.title')}}</el-link>
+              </el-col>
+            </el-row>
+          </div>
+        </el-col>
+
         <el-col :span="4">
           <div>
             <ms-environment-select
               :project-id="projectId"
-              :is-read-only="isReadOnly || isCaseEdit"
+              :is-read-only="isReadOnly"
               @setEnvironment="setEnvironment"/>
           </div>
         </el-col>
-        <el-col :span="3">
-          <div class="ms-api-header-select">
-            <el-input size="small" :placeholder="$t('api_test.definition.request.select_case')"
-                      :disabled="isCaseEdit"
-                      v-model="condition.name" @blur="getApiTest" @keyup.enter.native="getApiTest"/>
-          </div>
-        </el-col>
-        <el-col :span="2" v-if="!(isReadOnly || isCaseEdit)">
+
+        <el-col :span="1" v-if="!(isReadOnly || isCaseEdit)">
           <el-dropdown size="small" split-button type="primary" class="ms-api-header-select" @click="addCase"
-                       @command="handleCommand">
+                       @command="handleCommand" v-tester>
             +{{$t('api_test.definition.request.case')}}
             <el-dropdown-menu slot="dropdown">
               <el-dropdown-item command="run">{{$t('commons.test')}}</el-dropdown-item>
@@ -51,22 +61,27 @@
         </el-col>
       </el-row>
     </el-card>
+
+    <!--高级搜索-->
+    <ms-table-adv-search-bar :condition.sync="condition" :showLink="false" ref="searchBar" @search="search"/>
+
   </el-header>
 </template>
 
 <script>
 
-    import ApiEnvironmentConfig from "../../../test/components/ApiEnvironmentConfig";
-    import {parseEnvironment} from "../../../test/model/EnvironmentModel";
-    import MsTag from "../../../../common/components/MsTag";
-    import MsEnvironmentSelect from "./MsEnvironmentSelect";
-    import {API_METHOD_COLOUR} from "../../model/JsonData";
+  import ApiEnvironmentConfig from "../../../test/components/ApiEnvironmentConfig";
+  import {parseEnvironment} from "../../../test/model/EnvironmentModel";
+  import MsTag from "../../../../common/components/MsTag";
+  import MsEnvironmentSelect from "./MsEnvironmentSelect";
+  import {API_METHOD_COLOUR} from "../../model/JsonData";
+  import MsTableAdvSearchBar from "@/business/components/common/components/search/MsTableAdvSearchBar";
 
-    export default {
-      name: "ApiCaseHeader",
-      components: {MsEnvironmentSelect, MsTag, ApiEnvironmentConfig},
-      data() {
-        return {
+  export default {
+    name: "ApiCaseHeader",
+    components: {MsEnvironmentSelect, MsTag, ApiEnvironmentConfig, MsTableAdvSearchBar},
+    data() {
+      return {
         environments: [],
         environment: {},
         methodColorMap: new Map(API_METHOD_COLOUR),
@@ -83,7 +98,7 @@
         type: Object,
         default() {
           return {}
-        }
+        },
       }
     },
     created() {
@@ -129,8 +144,18 @@
       setEnvironment(data) {
         this.$emit('setEnvironment', data);
       },
-      getApiTest() {
+      search() {
+        if (this.priorities && this.condition.order) {
+          for (let index in this.priorities) {
+            if (this.priorities[index].id === this.condition.order) {
+              this.condition.orders = [this.priorities[index]];
+            }
+          }
+        }
         this.$emit('getApiTest');
+      },
+      open() {
+        this.$refs.searchBar.open();
       },
       addCase() {
         this.$emit('addCase');
@@ -170,7 +195,6 @@
     white-space: nowrap;
     font-size: 10px;
   }
-
 
   .el-col {
     height: 32px;

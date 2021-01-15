@@ -66,6 +66,13 @@
                   </el-form-item>
                 </el-col>
               </el-row>
+              <el-row>
+                <el-col :span="10" :offset="1">
+                  <el-form-item :label="$t('commons.tag')" :label-width="formLabelWidth" prop="tag">
+                    <ms-input-tag :currentScenario="form" ref="tag"/>
+                  </el-form-item>
+                </el-col>
+              </el-row>
 
               <el-row>
                 <el-col :span="10" :offset="1">
@@ -271,10 +278,11 @@ import TestCaseAttachment from "@/business/components/track/case/components/Test
 import {getCurrentProjectID} from "../../../../../common/js/utils";
 import {buildNodePath} from "../../../api/definition/model/NodeTree";
 import CaseComment from "@/business/components/track/case/components/CaseComment";
+import MsInputTag from "@/business/components/api/automation/scenario/MsInputTag";
 
 export default {
   name: "TestCaseEdit",
-  components: {CaseComment, MsDialogFooter, TestCaseAttachment},
+  components: {MsInputTag, CaseComment, MsDialogFooter, TestCaseAttachment},
   data() {
     return {
       result: {},
@@ -307,7 +315,7 @@ export default {
       rules: {
         name: [
           {required: true, message: this.$t('test_track.case.input_name'), trigger: 'blur'},
-          {max: 50, message: this.$t('test_track.length_less_than') + '50', trigger: 'blur'}
+          {max: 255, message: this.$t('test_track.length_less_than') + '255', trigger: 'blur'}
         ],
         module: [{required: true, message: this.$t('test_track.case.input_module'), trigger: 'change'}],
         maintainer: [{required: true, message: this.$t('test_track.case.input_maintainer'), trigger: 'change'}],
@@ -326,7 +334,7 @@ export default {
         {value: 'auto', label: this.$t('test_track.case.auto')},
         {value: 'manual', label: this.$t('test_track.case.manual')}
       ],
-      testCase: {}
+      testCase: {},
     };
   },
   props: {
@@ -357,6 +365,7 @@ export default {
     open(testCase) {
       this.testCase = {};
       if (testCase) {
+        testCase.tags = JSON.parse(testCase.tags);
         // 复制 不查询评论
         this.testCase = testCase.isCopy ? {} : testCase;
       }
@@ -506,6 +515,10 @@ export default {
       if (param.method != 'auto') {
         param.testId = null;
       }
+      if (this.form.tags instanceof Array) {
+        this.form.tags = JSON.stringify(this.form.tags);
+      }
+      param.tags = this.form.tags;
       return param;
     },
     getOption(param) {
@@ -695,7 +708,7 @@ export default {
     fileValidator(file) {
       /// todo: 是否需要对文件内容和大小做限制
       return file.size > 0;
-    }
+    },
   }
 }
 </script>
@@ -734,4 +747,5 @@ export default {
 .comment-card >>> .el-card__body {
   height: calc(100vh - 120px);
 }
+
 </style>

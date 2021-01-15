@@ -2,6 +2,7 @@ package io.metersphere.api.parse;
 
 import io.metersphere.api.dto.ApiTestImportRequest;
 import io.metersphere.api.dto.definition.ApiDefinitionResult;
+import io.metersphere.api.dto.definition.ApiModuleDTO;
 import io.metersphere.api.dto.definition.request.sampler.MsHTTPSamplerProxy;
 import io.metersphere.api.dto.scenario.Body;
 import io.metersphere.api.dto.scenario.KeyValue;
@@ -11,6 +12,8 @@ import io.metersphere.api.dto.scenario.request.RequestType;
 import io.metersphere.api.service.ApiModuleService;
 import io.metersphere.base.domain.ApiModule;
 import io.metersphere.commons.exception.MSException;
+import io.metersphere.commons.utils.BeanUtils;
+import io.metersphere.commons.utils.CommonBeanFactory;
 import io.metersphere.commons.utils.LogUtil;
 import io.metersphere.commons.utils.SessionUtils;
 import org.apache.commons.collections.CollectionUtils;
@@ -20,6 +23,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -59,6 +63,34 @@ public abstract class ApiImportAbstractParser implements ApiImportParser {
         }
     }
 
+    protected ApiModule getSelectModule(String moduleId) {
+        apiModuleService = CommonBeanFactory.getBean(ApiModuleService.class);
+        if (StringUtils.isNotBlank(moduleId) && !StringUtils.equals("root", moduleId)) {
+            ApiModule module = new ApiModule();
+            ApiModuleDTO moduleDTO = apiModuleService.getNode(moduleId);
+            if (moduleDTO != null) {
+                BeanUtils.copyBean(module, moduleDTO);
+            }
+            return module;
+        }
+        return null;
+    }
+
+    protected ApiModule buildModule(ApiModule parentModule, String name, boolean isSaved) {
+        apiModuleService = CommonBeanFactory.getBean(ApiModuleService.class);
+        ApiModule module;
+        if (parentModule != null) {
+            module = apiModuleService.getNewModule(name, this.projectId, parentModule.getLevel() + 1);
+            module.setParentId(parentModule.getId());
+        } else {
+            module = apiModuleService.getNewModule(name, this.projectId, 1);
+        }
+        if (isSaved) {
+            createModule(module);
+        }
+        return module;
+    }
+
     protected void createModule(ApiModule module) {
         module.setProtocol(RequestType.HTTP);
         List<ApiModule> apiModules = apiModuleService.selectSameModule(module);
@@ -69,10 +101,34 @@ public abstract class ApiImportAbstractParser implements ApiImportParser {
         }
     }
 
+    protected String getBodyType(String contentType) {
+        String bodyType = "";
+        switch (contentType) {
+            case "application/x-www-form-urlencoded":
+                bodyType = Body.WWW_FROM;
+                break;
+            case "multipart/form-data":
+                bodyType = Body.FORM_DATA;
+                break;
+            case "application/json":
+                bodyType = Body.JSON;
+                break;
+            case "application/xml":
+                bodyType = Body.XML;
+                break;
+            case "application/octet-stream":
+                bodyType = Body.BINARY;
+                break;
+            default:
+                bodyType = Body.RAW;
+        }
+        return bodyType;
+    }
+
     protected ApiDefinitionResult buildApiDefinition(String id, String name, String path, String method) {
         ApiDefinitionResult apiDefinition = new ApiDefinitionResult();
         apiDefinition.setName(name);
-        apiDefinition.setPath(path);
+        apiDefinition.setPath(formatPath(path));
         apiDefinition.setProtocol(RequestType.HTTP);
         apiDefinition.setMethod(method);
         apiDefinition.setId(id);
@@ -81,17 +137,34 @@ public abstract class ApiImportAbstractParser implements ApiImportParser {
         return apiDefinition;
     }
 
+    private String formatPath(String url) {
+        try {
+            URL urlObject = new URL(url);
+            StringBuffer pathBuffer = new StringBuffer(urlObject.getPath());
+            if (StringUtils.isNotEmpty(urlObject.getQuery())) {
+                pathBuffer.append("?").append(urlObject.getQuery());
+            }
+            return pathBuffer.toString();
+        } catch (Exception ex) {
+            return url;
+        }
+    }
+
     protected MsHTTPSamplerProxy buildRequest(String name, String path, String method) {
         MsHTTPSamplerProxy request = new MsHTTPSamplerProxy();
         request.setName(name);
-        request.setPath(path);
+        // 路径去掉域名/IP 地址，保留方法名称及参数
+        request.setPath(formatPath(path));
         request.setMethod(method);
         request.setProtocol(RequestType.HTTP);
         request.setId(UUID.randomUUID().toString());
         request.setHeaders(new ArrayList<>());
         request.setArguments(new ArrayList<>());
         request.setRest(new ArrayList<>());
-        request.setBody(new Body());
+        Body body = new Body();
+        body.initKvs();
+        body.initBinary();
+        request.setBody(body);
         return request;
     }
 
@@ -100,10 +173,10 @@ public abstract class ApiImportAbstractParser implements ApiImportParser {
     }
 
     protected void addCookie(List<KeyValue> headers, String key, String value) {
-        addCookie(headers, key, value, "");
+        addCookie(headers, key, value, "", true);
     }
 
-    protected void addCookie(List<KeyValue> headers, String key, String value, String description) {
+    protected void addCookie(List<KeyValue> headers, String key, String value, String description, boolean required) {
         boolean hasCookie = false;
         for (KeyValue header : headers) {
             if (StringUtils.equalsIgnoreCase("Cookie", header.getName())) {
@@ -113,15 +186,15 @@ public abstract class ApiImportAbstractParser implements ApiImportParser {
             }
         }
         if (!hasCookie) {
-            addHeader(headers, "Cookie", key + "=" + value + ";", description);
+            addHeader(headers, "Cookie", key + "=" + value + ";", description, "", required);
         }
     }
 
     protected void addHeader(List<KeyValue> headers, String key, String value) {
-        addHeader(headers, key, value, "");
+        addHeader(headers, key, value, "", "", true);
     }
 
-    protected void addHeader(List<KeyValue> headers, String key, String value, String description) {
+    protected void addHeader(List<KeyValue> headers, String key, String value, String description, String contentType, boolean required) {
         boolean hasContentType = false;
         for (KeyValue header : headers) {
             if (StringUtils.equalsIgnoreCase(header.getName(), key)) {
@@ -129,20 +202,7 @@ public abstract class ApiImportAbstractParser implements ApiImportParser {
             }
         }
         if (!hasContentType) {
-            headers.add(new KeyValue(key, value, description));
+            headers.add(new KeyValue(key, value, description, contentType, required));
         }
     }
-//    protected void addHeader(HttpRequest request, String key, String value) {
-//        List<KeyValue> headers = Optional.ofNullable(request.getHeaders()).orElse(new ArrayList<>());
-//        boolean hasContentType = false;
-//        for (KeyValue header : headers) {
-//            if (StringUtils.equalsIgnoreCase(header.getName(), key)) {
-//                hasContentType = true;
-//            }
-//        }
-//        if (!hasContentType) {
-//            headers.save(new KeyValue(key, value));
-//        }
-//        request.setHeaders(headers);
-//    }
 }

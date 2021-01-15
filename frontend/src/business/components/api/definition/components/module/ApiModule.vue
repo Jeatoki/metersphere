@@ -1,6 +1,8 @@
 <template>
   <div v-loading="result.loading">
 
+    <slot name="header"></slot>
+
     <ms-node-tree
       v-loading="result.loading"
       :tree-nodes="data"
@@ -19,6 +21,7 @@
           :is-read-only="isReadOnly"
           @exportAPI="exportAPI"
           @saveAsEdit="saveAsEdit"
+          @refreshTable="$emit('refreshTable')"
           @refresh="refresh"
           @debug="debug"/>
       </template>
@@ -67,6 +70,16 @@
         default() {
           return false
         }
+      },
+      planId: String,
+      relevanceProjectId: String
+    },
+    computed: {
+      isPlanModel() {
+        return this.planId ? true : false;
+      },
+      isRelevanceModel() {
+        return this.relevanceProjectId ? true : false;
       }
     },
     mounted() {
@@ -85,21 +98,36 @@
       'condition.trashEnable'() {
         this.$emit('enableTrash', this.condition.trashEnable);
       },
+      planId() {
+        this.list();
+      },
+      relevanceProjectId() {
+        this.list();
+      }
     },
     methods: {
       list() {
-        if (this.projectId) {
-          this.result = this.$get("/api/module/list/" + this.projectId + "/" + this.condition.protocol, response => {
-            if (response.data != undefined && response.data != null) {
-              this.data = response.data;
-              let moduleOptions = [];
-              this.data.forEach(node => {
-                buildNodePath(node, {path: ''}, moduleOptions);
-              });
-              this.$emit('setModuleOptions', moduleOptions);
-            }
-          });
+        let url = undefined;
+        if (this.isPlanModel) {
+          url = '/api/module/list/plan/' + this.planId + '/' + this.condition.protocol;
+        } else if (this.isRelevanceModel) {
+          url = "/api/module/list/" + this.relevanceProjectId + "/" + this.condition.protocol;
+        } else {
+          url = "/api/module/list/" + this.projectId + "/" + this.condition.protocol;
+          if (!this.projectId) {
+            return;
+          }
         }
+        this.result = this.$get(url, response => {
+          if (response.data != undefined && response.data != null) {
+            this.data = response.data;
+            let moduleOptions = [];
+            this.data.forEach(node => {
+              buildNodePath(node, {path: ''}, moduleOptions);
+            });
+            this.$emit('setModuleOptions', moduleOptions);
+          }
+        });
       },
       edit(param) {
         param.projectId = this.projectId;
@@ -132,8 +160,9 @@
       },
       drag(param, list) {
         this.$post("/api/module/drag", param, () => {
-          // this.$post("/api/module/pos", list); //todo 排序
-          this.list();
+          this.$post("/api/module/pos", list, () => {
+            this.list();
+          });
         }, (error) => {
           this.list();
         });
@@ -145,6 +174,13 @@
           this.$emit("nodeSelectEvent", node, [], pNodes);
         } else {
           this.$emit("nodeSelectEvent", node, nodeIds, pNodes);
+        }
+      },
+      //创建根目录的模块---供父类使用
+      createRootModel(){
+        let dataArr = this.$refs.nodeTree.extendTreeNodes;
+        if(dataArr.length>0){
+          this.$refs.nodeTree.append({},dataArr[0]);
         }
       },
       exportAPI() {

@@ -128,19 +128,21 @@
                                         @exec="openReport(scope.row.id, scope.row.reportId)"/>
             </template>
           </ms-table-operator>
+          <ms-table-operator-button style="margin-left: 10px;color:#6C317C" type=""
+                                    :tip="$t('commons.trigger_mode.schedule')" icon="el-icon-time"
+                                    @exec="scheduleTask(scope.row)"/>
         </template>
       </el-table-column>
     </el-table>
 
     <ms-table-pagination :change="initTableData" :current-page.sync="currentPage" :page-size.sync="pageSize"
                          :total="total"/>
-
     <test-report-template-list @openReport="openReport" ref="testReportTemplateList"/>
     <test-case-report-view @refresh="initTableData" ref="testCaseReportView"/>
     <ms-delete-confirm :title="$t('test_track.plan.plan_delete')" @delete="_handleDelete" ref="deleteConfirm" :with-tip="enableDeleteTip">
       {{$t('test_track.plan.plan_delete_tip')}}
     </ms-delete-confirm>
-
+    <ms-schedule-maintain ref="scheduleMaintain" />
   </el-card>
 </template>
 
@@ -159,6 +161,8 @@ import TestCaseReportView from "../view/comonents/report/TestCaseReportView";
 import MsDeleteConfirm from "../../../common/components/MsDeleteConfirm";
 import {TEST_PLAN_CONFIGS} from "../../../common/components/search/search-components";
 import {LIST_CHANGE, TrackEvent} from "@/business/components/common/head/ListEvent";
+import {getCurrentProjectID} from "../../../../../common/js/utils";
+import MsScheduleMaintain from "@/business/components/api/automation/schedule/ScheduleMaintain"
 
 export default {
   name: "TestPlanList",
@@ -168,6 +172,7 @@ export default {
     TestReportTemplateList,
     PlanStageTableItem,
     PlanStatusTableItem,
+    MsScheduleMaintain,
     MsTableOperator, MsTableOperatorButton, MsDialogFooter, MsTableHeader, MsCreateBox, MsTablePagination
   },
   data() {
@@ -216,6 +221,9 @@ export default {
       if (this.selectNodeIds && this.selectNodeIds.length > 0) {
         this.condition.nodeIds = this.selectNodeIds;
       }
+      if (!getCurrentProjectID()) {
+        return;
+      }
       this.result = this.$post(this.buildPagePath(this.queryPath), this.condition, response => {
         let data = response.data;
         this.total = data.itemCount;
@@ -224,9 +232,7 @@ export default {
           let path = "/test/plan/project";
           this.$post(path,{planId: this.tableData[i].id}, res => {
             let arr = res.data;
-            let projectName = arr.map(data => data.name).join("、");
-            let projectIds = arr.map(data => data.id);
-            this.$set(this.tableData[i], "projectName", projectName);
+            let projectIds = arr.filter(d => d.id !== this.tableData[i].projectId).map(data => data.id);
             this.$set(this.tableData[i], "projectIds", projectIds);
           })
         }
@@ -236,6 +242,10 @@ export default {
       return path + "/" + this.currentPage + "/" + this.pageSize;
     },
     testPlanCreate() {
+      if (!getCurrentProjectID()) {
+        this.$warning(this.$t('commons.check_project_tip'));
+        return;
+      }
       this.$emit('openTestPlanEditDialog');
     },
     handleEdit(testPlan) {
@@ -282,6 +292,10 @@ export default {
       if (reportId) {
         this.$refs.testCaseReportView.open(planId, reportId);
       }
+    },
+    scheduleTask(row){
+      row.redirectFrom = "testPlan";
+      this.$refs.scheduleMaintain.open(row);
     },
   }
 }

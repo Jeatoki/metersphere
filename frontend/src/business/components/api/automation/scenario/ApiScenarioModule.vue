@@ -1,10 +1,12 @@
 <template>
   <div>
 
+    <slot name="header"></slot>
+
     <ms-node-tree
       v-loading="result.loading"
       :tree-nodes="data"
-      :type="'edit'"
+      :type="isReadOnly ? 'view' : 'edit'"
       @add="add"
       @edit="edit"
       @drag="drag"
@@ -13,13 +15,12 @@
       ref="nodeTree">
 
       <template v-slot:header>
-        <el-input style="width: 275px;" :placeholder="$t('test_track.module.search')" v-model="condition.filterText"
-                  size="small">
+        <el-input :placeholder="$t('test_track.module.search')" v-model="condition.filterText" size="small">
           <template v-slot:append>
-            <el-button icon="el-icon-folder-add" @click="addScenario"/>
+            <el-button v-if="!isReadOnly" icon="el-icon-folder-add" @click="addScenario" v-tester/>
           </template>
         </el-input>
-        <module-trash-button :condition="condition" :exe="enableTrash"/>
+        <module-trash-button v-if="!isReadOnly" :condition="condition" :exe="enableTrash"/>
       </template>
 
     </ms-node-tree>
@@ -48,6 +49,24 @@
       MsAddBasisScenario,
       SelectMenu,
     },
+    props: {
+      isReadOnly: {
+        type: Boolean,
+        default() {
+          return false
+        }
+      },
+      relevanceProjectId: String,
+      planId: String
+    },
+    computed: {
+      isPlanModel() {
+        return this.planId ? true : false;
+      },
+      isRelevanceModel() {
+        return this.relevanceProjectId ? true : false;
+      }
+    },
     data() {
       return {
         result: {},
@@ -71,22 +90,37 @@
       'condition.trashEnable'() {
         this.$emit('enableTrash', this.condition.trashEnable);
       },
+      planId() {
+        this.list();
+      },
+      relevanceProjectId() {
+        this.list();
+      }
     },
     methods: {
 
       list() {
-        if (this.projectId) {
-          this.result = this.$get("/api/automation/module/list/" + this.projectId + "/", response => {
-            if (response.data != undefined && response.data != null) {
-              this.data = response.data;
-              let moduleOptions = [];
-              this.data.forEach(node => {
-                buildNodePath(node, {path: ''}, moduleOptions);
-              });
-              this.$emit('setModuleOptions', moduleOptions);
-            }
-          });
+        let url = undefined;
+        if (this.isPlanModel) {
+          url = '/api/automation/module/list/plan/' + this.planId;
+        } else if (this.isRelevanceModel) {
+          url = "/api/automation/module/list/" + this.relevanceProjectId;
+        } else {
+          url = "/api/automation/module/list/" + this.projectId;
+          if (!this.projectId) {
+            return;
+          }
         }
+        this.result = this.$get(url, response => {
+          if (response.data != undefined && response.data != null) {
+            this.data = response.data;
+            let moduleOptions = [];
+            this.data.forEach(node => {
+              buildNodePath(node, {path: ''}, moduleOptions);
+            });
+            this.$emit('setModuleOptions', moduleOptions);
+          }
+        });
       },
       edit(param) {
         param.projectId = this.projectId;
@@ -119,8 +153,9 @@
       },
       drag(param, list) {
         this.$post("/api/automation/module/drag", param, () => {
-          // this.$post("/api/module/pos", list); //todo 排序
-          this.list();
+          this.$post("/api/automation/module/pos", list, () => {
+            this.list();
+          });
         }, (error) => {
           this.list();
         });
@@ -147,6 +182,10 @@
         this.$emit("refreshTable");
       },
       addScenario() {
+        if (!getCurrentProjectID()) {
+          this.$warning(this.$t('commons.check_project_tip'));
+          return;
+        }
         this.$refs.basisScenario.open(this.currentModule);
       },
       enableTrash() {
@@ -206,4 +245,5 @@
   .ms-api-buttion {
     width: 30px;
   }
+
 </style>

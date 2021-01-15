@@ -15,7 +15,7 @@ public class KeyValue {
     private List<BodyFile> files;
     private String description;
     private String contentType;
-    private boolean enable;
+    private boolean enable = true;
     private boolean encode = true;
     private boolean required;
 
@@ -31,17 +31,33 @@ public class KeyValue {
         this(name, value, description, null);
     }
 
+    public KeyValue(String name, String type, String value, boolean required, boolean enable) {
+        this.name = name;
+        this.type = type;
+        this.value = value;
+        this.required = required;
+        this.enable = enable;
+    }
+
     public KeyValue(String name, String value, String description, String contentType) {
+        this(name, value, description, contentType, true);
+    }
+
+    public KeyValue(String name, String value, String description, String contentType, boolean required) {
         this.name = name;
         this.value = value;
         this.description = description;
         this.contentType = contentType;
         this.enable = true;
-        this.required = true;
+        this.required = required;
+    }
+
+    public KeyValue(String name, String value, String description, boolean required) {
+        this(name, value, description, "", required);
     }
 
     public boolean isValid() {
-        return (StringUtils.isNotBlank(name) || StringUtils.isNotBlank(value)) && !StringUtils.equalsIgnoreCase(type, "file");
+        return ((StringUtils.isNotBlank(name) && StringUtils.isNotBlank(value)) || "JSON-SCHEMA".equals(type)) && !StringUtils.equalsIgnoreCase(type, "file");
     }
 
     public boolean isFile() {

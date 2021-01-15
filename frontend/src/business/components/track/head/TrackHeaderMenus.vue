@@ -41,6 +41,10 @@
             <ms-create-button v-permission="['test_manager','test_user']" :index="'/track/plan/create'"
                               :title="$t('test_track.plan.create_plan')"/>
           </el-submenu>
+
+          <el-menu-item :index="'/track/testPlan/reportList'">
+            {{ $t("commons.report") }}
+          </el-menu-item>
         </el-menu>
       </el-col>
       <el-col :span="8"/>
@@ -131,11 +135,13 @@ export default {
     },
     registerEvents() {
       TrackEvent.$on(LIST_CHANGE, () => {
-        // // todo 这里偶尔会有 refs 为空的情况
         this.$refs.planRecent.recent();
         this.$refs.caseRecent.recent();
       });
     }
+  },
+  beforeDestroy() {
+    TrackEvent.$off(LIST_CHANGE);
   }
 }
 

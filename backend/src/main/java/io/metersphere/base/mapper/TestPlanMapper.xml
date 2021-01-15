@@ -19,8 +19,7 @@
     <result column="planned_end_time" jdbcType="BIGINT" property="plannedEndTime" />
     <result column="actual_start_time" jdbcType="BIGINT" property="actualStartTime" />
     <result column="creator" jdbcType="VARCHAR" property="creator" />
-    <result column="api_ids" jdbcType="VARCHAR" property="apiIds" />
-    <result column="scenario_ids" jdbcType="VARCHAR" property="scenarioIds" />
+    <result column="project_id" jdbcType="VARCHAR" property="projectId" />
   </resultMap>
   <resultMap extends="BaseResultMap" id="ResultMapWithBLOBs" type="io.metersphere.base.domain.TestPlan">
     <result column="tags" jdbcType="LONGVARCHAR" property="tags" />
@@ -86,7 +85,7 @@
   <sql id="Base_Column_List">
     id, workspace_id, report_id, `name`, description, `status`, stage, principal, test_case_match_rule, 
     executor_match_rule, create_time, update_time, actual_end_time, planned_start_time, 
-    planned_end_time, actual_start_time, creator, api_ids, scenario_ids
+    planned_end_time, actual_start_time, creator, project_id
   </sql>
   <sql id="Blob_Column_List">
     tags
@@ -145,15 +144,15 @@
       stage, principal, test_case_match_rule, 
       executor_match_rule, create_time, update_time, 
       actual_end_time, planned_start_time, planned_end_time, 
-      actual_start_time, creator, api_ids, 
-      scenario_ids, tags)
+      actual_start_time, creator, project_id, 
+      tags)
     values (#{id,jdbcType=VARCHAR}, #{workspaceId,jdbcType=VARCHAR}, #{reportId,jdbcType=VARCHAR}, 
       #{name,jdbcType=VARCHAR}, #{description,jdbcType=VARCHAR}, #{status,jdbcType=VARCHAR}, 
       #{stage,jdbcType=VARCHAR}, #{principal,jdbcType=VARCHAR}, #{testCaseMatchRule,jdbcType=VARCHAR}, 
       #{executorMatchRule,jdbcType=VARCHAR}, #{createTime,jdbcType=BIGINT}, #{updateTime,jdbcType=BIGINT}, 
       #{actualEndTime,jdbcType=BIGINT}, #{plannedStartTime,jdbcType=BIGINT}, #{plannedEndTime,jdbcType=BIGINT}, 
-      #{actualStartTime,jdbcType=BIGINT}, #{creator,jdbcType=VARCHAR}, #{apiIds,jdbcType=VARCHAR}, 
-      #{scenarioIds,jdbcType=VARCHAR}, #{tags,jdbcType=LONGVARCHAR})
+      #{actualStartTime,jdbcType=BIGINT}, #{creator,jdbcType=VARCHAR}, #{projectId,jdbcType=VARCHAR}, 
+      #{tags,jdbcType=LONGVARCHAR})
   </insert>
   <insert id="insertSelective" parameterType="io.metersphere.base.domain.TestPlan">
     insert into test_plan
@@ -209,11 +208,8 @@
       <if test="creator != null">
         creator,
       </if>
-      <if test="apiIds != null">
-        api_ids,
-      </if>
-      <if test="scenarioIds != null">
-        scenario_ids,
+      <if test="projectId != null">
+        project_id,
       </if>
       <if test="tags != null">
         tags,
@@ -271,11 +267,8 @@
       <if test="creator != null">
         #{creator,jdbcType=VARCHAR},
       </if>
-      <if test="apiIds != null">
-        #{apiIds,jdbcType=VARCHAR},
-      </if>
-      <if test="scenarioIds != null">
-        #{scenarioIds,jdbcType=VARCHAR},
+      <if test="projectId != null">
+        #{projectId,jdbcType=VARCHAR},
       </if>
       <if test="tags != null">
         #{tags,jdbcType=LONGVARCHAR},
@@ -342,11 +335,8 @@
       <if test="record.creator != null">
         creator = #{record.creator,jdbcType=VARCHAR},
       </if>
-      <if test="record.apiIds != null">
-        api_ids = #{record.apiIds,jdbcType=VARCHAR},
-      </if>
-      <if test="record.scenarioIds != null">
-        scenario_ids = #{record.scenarioIds,jdbcType=VARCHAR},
+      <if test="record.projectId != null">
+        project_id = #{record.projectId,jdbcType=VARCHAR},
       </if>
       <if test="record.tags != null">
         tags = #{record.tags,jdbcType=LONGVARCHAR},
@@ -375,8 +365,7 @@
       planned_end_time = #{record.plannedEndTime,jdbcType=BIGINT},
       actual_start_time = #{record.actualStartTime,jdbcType=BIGINT},
       creator = #{record.creator,jdbcType=VARCHAR},
-      api_ids = #{record.apiIds,jdbcType=VARCHAR},
-      scenario_ids = #{record.scenarioIds,jdbcType=VARCHAR},
+      project_id = #{record.projectId,jdbcType=VARCHAR},
       tags = #{record.tags,jdbcType=LONGVARCHAR}
     <if test="_parameter != null">
       <include refid="Update_By_Example_Where_Clause" />
@@ -401,8 +390,7 @@
       planned_end_time = #{record.plannedEndTime,jdbcType=BIGINT},
       actual_start_time = #{record.actualStartTime,jdbcType=BIGINT},
       creator = #{record.creator,jdbcType=VARCHAR},
-      api_ids = #{record.apiIds,jdbcType=VARCHAR},
-      scenario_ids = #{record.scenarioIds,jdbcType=VARCHAR}
+      project_id = #{record.projectId,jdbcType=VARCHAR}
     <if test="_parameter != null">
       <include refid="Update_By_Example_Where_Clause" />
     </if>
@@ -458,11 +446,8 @@
       <if test="creator != null">
         creator = #{creator,jdbcType=VARCHAR},
       </if>
-      <if test="apiIds != null">
-        api_ids = #{apiIds,jdbcType=VARCHAR},
-      </if>
-      <if test="scenarioIds != null">
-        scenario_ids = #{scenarioIds,jdbcType=VARCHAR},
+      <if test="projectId != null">
+        project_id = #{projectId,jdbcType=VARCHAR},
       </if>
       <if test="tags != null">
         tags = #{tags,jdbcType=LONGVARCHAR},
@@ -488,8 +473,7 @@
       planned_end_time = #{plannedEndTime,jdbcType=BIGINT},
       actual_start_time = #{actualStartTime,jdbcType=BIGINT},
       creator = #{creator,jdbcType=VARCHAR},
-      api_ids = #{apiIds,jdbcType=VARCHAR},
-      scenario_ids = #{scenarioIds,jdbcType=VARCHAR},
+      project_id = #{projectId,jdbcType=VARCHAR},
       tags = #{tags,jdbcType=LONGVARCHAR}
     where id = #{id,jdbcType=VARCHAR}
   </update>
@@ -511,8 +495,7 @@
       planned_end_time = #{plannedEndTime,jdbcType=BIGINT},
       actual_start_time = #{actualStartTime,jdbcType=BIGINT},
       creator = #{creator,jdbcType=VARCHAR},
-      api_ids = #{apiIds,jdbcType=VARCHAR},
-      scenario_ids = #{scenarioIds,jdbcType=VARCHAR}
+      project_id = #{projectId,jdbcType=VARCHAR}
     where id = #{id,jdbcType=VARCHAR}
   </update>
 </mapper>

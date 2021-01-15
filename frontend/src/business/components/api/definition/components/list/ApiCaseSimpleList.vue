@@ -1,40 +1,38 @@
 <template>
   <div>
     <api-list-container
-      :is-show-change-button="!isPlanModel"
       :is-api-list-enable="isApiListEnable"
       @isApiListEnableChange="isApiListEnableChange">
+      <el-link type="primary" style="float:right;margin-top: 5px" @click="open">{{$t('commons.adv_search.title')}}</el-link>
 
-      <ms-environment-select v-if="isRelevanceModel" :project-id="relevanceProjectId" :is-read-only="isReadOnly" @setEnvironment="setEnvironment"/>
-
-      <el-input v-if="!isPlanModel" placeholder="搜索" @blur="search" class="search-input" size="small" v-model="condition.name"/>
-
-      <template v-slot:header>
-       <test-plan-case-list-header
-         :project-id="getProjectId()"
-         :condition="condition"
-         :plan-id="planId"
-         @refresh="initTable"
-         @relevanceCase="$emit('relevanceCase')"
-         @setEnvironment="setEnvironment"
-         v-if="isPlanModel"/>
-      </template>
+      <el-input placeholder="搜索" @blur="search" @keyup.enter.native="search" class="search-input" size="small"
+                v-model="condition.name"/>
 
       <el-table v-loading="result.loading"
+                ref="caseTable"
                 border
-                :data="tableData" row-key="id" class="test-content adjust-table"
+                :data="tableData" row-key="id" class="test-content adjust-table ms-select-all"
                 @select-all="handleSelectAll"
                 @filter-change="filter"
                 @sort-change="sort"
                 @select="handleSelect" :height="screenHeight">
-        <el-table-column type="selection"/>
-        <el-table-column width="40" :resizable="false" align="center">
+
+        <el-table-column type="selection" width="50"/>
+
+        <ms-table-select-all
+          :page-size="pageSize"
+          :total="total"
+          @selectPageAll="isSelectDataAll(false)"
+          @selectAll="isSelectDataAll(true)"/>
+
+        <el-table-column width="30" :resizable="false" align="center">
           <template v-slot:default="scope">
-            <show-more-btn :is-show="scope.row.showMore && !isReadOnly" :buttons="buttons" :size="selectRows.size"/>
+            <show-more-btn :is-show="scope.row.showMore" :buttons="buttons" :size="selectDataCounts"/>
           </template>
         </el-table-column>
 
-        <el-table-column prop="name" :label="$t('api_test.definition.api_name')" show-overflow-tooltip/>
+        <el-table-column prop="num" label="ID" show-overflow-tooltip/>
+        <el-table-column prop="name" :label="$t('test_track.case.name')" show-overflow-tooltip/>
 
         <el-table-column
           prop="priority"
@@ -48,6 +46,7 @@
         </el-table-column>
 
         <el-table-column
+          sortable="custom"
           prop="path"
           :label="$t('api_test.definition.api_path')"
           show-overflow-tooltip/>
@@ -67,11 +66,15 @@
           </template>
         </el-table-column>
 
-        <el-table-column v-if="!isReadOnly && !isRelevanceModel" :label="$t('commons.operating')" min-width="130" align="center">
+        <el-table-column v-if="!isReadOnly" :label="$t('commons.operating')" min-width="130" align="center">
           <template v-slot:default="scope">
-            <!--<el-button type="text" @click="reductionApi(scope.row)" v-if="trashEnable">恢复</el-button>-->
-            <el-button type="text" @click="handleTestCase(scope.row)" v-if="!trashEnable">{{$t('commons.edit')}}</el-button>
-            <el-button type="text" @click="handleDelete(scope.row)" style="color: #F56C6C">{{$t('commons.delete')}}</el-button>
+            <!--<el-button type="text" @click="reductionApi(scope.row)" v-if="trashEnable">{{$t('commons.reduction')}}</el-button>-->
+            <el-button type="text" @click="handleTestCase(scope.row)" v-if="!trashEnable">{{ $t('commons.edit') }}
+            </el-button>
+            <el-button type="text" @click="handleDelete(scope.row)" style="color: #F56C6C">{{ $t('commons.delete') }}
+            </el-button>
+            <ms-api-case-table-extend-btns @showCaseRef="showCaseRef" @showEnvironment="showEnvironment" @createPerformance="createPerformance" :row="scope.row" v-tester/>
+
           </template>
         </el-table-column>
 
@@ -80,9 +83,16 @@
                            :total="total"/>
     </api-list-container>
 
-    <api-case-list v-if="!isRelevanceModel" @showExecResult="showExecResult" @refresh="initTable" :currentApi="selectCase" ref="caseList"/>
+    <api-case-list @showExecResult="showExecResult" @refresh="initTable" :currentApi="selectCase" ref="caseList"/>
     <!--批量编辑-->
-    <ms-batch-edit v-if="!isRelevanceModel" ref="batchEdit" @batchEdit="batchEdit" :typeArr="typeArr" :value-arr="valueArr"/>
+    <ms-batch-edit ref="batchEdit" @batchEdit="batchEdit" :typeArr="typeArr" :value-arr="valueArr"/>
+    <!--选择环境(当创建性能测试的时候)-->
+    <ms-set-environment ref="setEnvironment" :testCase="clickRow" @createPerformance="createPerformance"/>
+    <!--查看引用-->
+    <ms-reference-view ref="viewRef"/>
+    <!--高级搜索-->
+    <ms-table-adv-search-bar :condition.sync="condition" :showLink="false" ref="searchBar" @search="initTable"/>
+
   </div>
 
 </template>
@@ -99,20 +109,29 @@
   import MsBottomContainer from "../BottomContainer";
   import ShowMoreBtn from "../../../../track/case/components/ShowMoreBtn";
   import MsBatchEdit from "../basis/BatchEdit";
-  import {API_METHOD_COLOUR, CASE_PRIORITY} from "../../model/JsonData";
-  import {getCurrentProjectID} from "@/common/js/utils";
+  import {API_METHOD_COLOUR, CASE_PRIORITY, REQ_METHOD} from "../../model/JsonData";
+
+  import {getBodyUploadFiles, getCurrentProjectID} from "@/common/js/utils";
   import ApiListContainer from "./ApiListContainer";
   import PriorityTableItem from "../../../../track/common/tableItems/planview/PriorityTableItem";
   import ApiCaseList from "../case/ApiCaseList";
   import {_filter, _sort} from "../../../../../../common/js/utils";
-  import TestPlanCaseListHeader from "../../../../track/plan/view/comonents/api/TestPlanCaseListHeader";
-  import MsEnvironmentSelect from "../case/MsEnvironmentSelect";
+  import {_handleSelect, _handleSelectAll} from "../../../../../../common/js/tableUtils";
+  import MsApiCaseTableExtendBtns from "../reference/ApiCaseTableExtendBtns";
+  import MsReferenceView from "../reference/ReferenceView";
+  import MsSetEnvironment from "@/business/components/api/definition/components/basis/SetEnvironment";
+  import TestPlan from "@/business/components/api/definition/components/jmeter/components/test-plan";
+  import ThreadGroup from "@/business/components/api/definition/components/jmeter/components/thread-group";
+  import {parseEnvironment} from "@/business/components/api/test/model/EnvironmentModel";
+  import MsTableSelectAll from "../../../../common/components/table/MsTableSelectAll";
+  import MsTableAdvSearchBar from "@/business/components/common/components/search/MsTableAdvSearchBar";
+  import {API_CASE_CONFIGS} from "@/business/components/common/components/search/search-components";
 
   export default {
     name: "ApiCaseSimpleList",
     components: {
-      MsEnvironmentSelect,
-      TestPlanCaseListHeader,
+      MsTableSelectAll,
+      MsSetEnvironment,
       ApiCaseList,
       PriorityTableItem,
       ApiListContainer,
@@ -124,22 +143,31 @@
       MsContainer,
       MsBottomContainer,
       ShowMoreBtn,
-      MsBatchEdit
+      MsBatchEdit,
+      MsApiCaseTableExtendBtns,
+      MsReferenceView,
+      MsTableAdvSearchBar
     },
     data() {
       return {
-        condition: {},
+        condition: {
+          components: API_CASE_CONFIGS
+        },
         selectCase: {},
         result: {},
         moduleId: "",
+        selectDataRange: "all",
         deletePath: "/test/case/delete",
         selectRows: new Set(),
+        clickRow: {},
         buttons: [
           {name: this.$t('api_test.definition.request.batch_delete'), handleClick: this.handleDeleteBatch},
           {name: this.$t('api_test.definition.request.batch_edit'), handleClick: this.handleEditBatch}
         ],
         typeArr: [
           {id: 'priority', name: this.$t('test_track.case.priority')},
+          {id: 'method', name: this.$t('api_test.definition.api_type')},
+          {id: 'path', name: this.$t('api_test.request.path')},
         ],
         priorityFilters: [
           {text: 'P0', value: 'P0'},
@@ -149,6 +177,7 @@
         ],
         valueArr: {
           priority: CASE_PRIORITY,
+          method: REQ_METHOD,
         },
         methodColorMap: new Map(API_METHOD_COLOUR),
         tableData: [],
@@ -156,7 +185,11 @@
         pageSize: 10,
         total: 0,
         screenHeight: document.documentElement.clientHeight - 330,//屏幕高度
-        environmentId: undefined
+        environmentId: undefined,
+        selectAll: false,
+        unSelection: [],
+        selectDataCounts: 0,
+        environments: [],
       }
     },
     props: {
@@ -211,14 +244,7 @@
       }
     },
     computed: {
-      // 测试计划关联测试列表
-      isRelevanceModel() {
-        return this.model === 'relevance'
-      },
-      // 测试计划接口用例列表
-      isPlanModel() {
-        return this.model === 'plan'
-      },
+
       // 接口定义用例列表
       isApiModel() {
         return this.model === 'api'
@@ -230,76 +256,48 @@
       },
       initTable() {
         this.selectRows = new Set();
-        // this.condition.filters = ["Prepare", "Underway", "Completed"];
         this.condition.status = "";
         this.condition.moduleIds = this.selectNodeIds;
         if (this.trashEnable) {
           this.condition.status = "Trash";
           this.condition.moduleIds = [];
         }
-
-        this.buildCondition(this.condition);
+        this.selectAll = false;
+        this.unSelection = [];
+        this.selectDataCounts = 0;
+        this.condition.projectId = getCurrentProjectID();
 
         if (this.currentProtocol != null) {
           this.condition.protocol = this.currentProtocol;
         }
-        this.result = this.$post(this.getListUrl() + this.currentPage + "/" + this.pageSize, this.condition, response => {
-          this.total = response.data.itemCount;
-          this.tableData = response.data.listObject;
-        });
-      },
-      buildCondition(condition) {
-        if (this.isPlanModel) {
-          condition.planId = this.planId;
-        } else if (this.isRelevanceModel) {
-          condition.planId = this.planId;
-          condition.projectId = this.getProjectId();
-        } else {
-          condition.projectId = this.getProjectId();
+
+        //检查是否只查询本周数据
+        this.isSelectThissWeekData();
+        this.condition.selectThisWeedData = false;
+        this.condition.id = null;
+        if (this.selectDataRange == 'thisWeekCount') {
+          this.condition.selectThisWeedData = true;
+        } else if (this.selectDataRange != null) {
+          let selectParamArr = this.selectDataRange.split("single:");
+
+          if (selectParamArr.length == 2) {
+            this.condition.id = selectParamArr[1];
+          }
+        }
+        if (this.condition.projectId) {
+          this.result = this.$post('/api/testcase/list/' + this.currentPage + "/" + this.pageSize, this.condition, response => {
+            this.total = response.data.itemCount;
+            this.tableData = response.data.listObject;
+            this.unSelection = response.data.listObject.map(s => s.id);
+          });
         }
       },
-      getListUrl() {
-        if (this.isPlanModel) {
-          return '/test/plan/api/case/list/';
-        } else if (this.isRelevanceModel) {
-          return '/test/plan/api/case/relevance/list/';
-        } else {
-          return '/api/testcase/list/';
-        }
+      open() {
+        this.$refs.searchBar.open();
       },
-      getDeleteUrl(apiCase) {
-        if (this.isPlanModel) {
-          return '/test/plan/api/case/delete/' + this.planId + '/' + apiCase.id;
-        } else if (this.isRelevanceModel) {
-          return '/api/testcase/delete/' + apiCase.id;
-        } else {
-          return '/api/testcase/delete/' + +apiCase.id;
-        }
-      },
-      // getMaintainerOptions() {
-      //   let workspaceId = localStorage.getItem(WORKSPACE_ID);
-      //   this.$post('/user/ws/member/tester/list', {workspaceId: workspaceId}, response => {
-      //     this.valueArr.userId = response.data;
-      //   });
-      // },
       handleSelect(selection, row) {
-        row.hashTree = [];
-        if (this.selectRows.has(row)) {
-          this.$set(row, "showMore", false);
-          this.selectRows.delete(row);
-        } else {
-          this.$set(row, "showMore", true);
-          this.selectRows.add(row);
-        }
-        let arr = Array.from(this.selectRows);
-        // 选中1个以上的用例时显示更多操作
-        if (this.selectRows.size === 1) {
-          this.$set(arr[0], "showMore", false);
-        } else if (this.selectRows.size === 2) {
-          arr.forEach(row => {
-            this.$set(row, "showMore", true);
-          })
-        }
+        _handleSelect(this, selection, row, this.selectRows);
+        this.selectRowsCount(this.selectRows)
       },
       showExecResult(row) {
         this.visible = false;
@@ -318,25 +316,11 @@
         this.initTable();
       },
       handleSelectAll(selection) {
-        if (selection.length > 0) {
-          if (selection.length === 1) {
-            selection.hashTree = [];
-            this.selectRows.add(selection[0]);
-          } else {
-            this.tableData.forEach(item => {
-              item.hashTree = [];
-              this.$set(item, "showMore", true);
-              this.selectRows.add(item);
-            });
-          }
-        } else {
-          this.selectRows.clear();
-          this.tableData.forEach(row => {
-            this.$set(row, "showMore", false);
-          })
-        }
+        _handleSelectAll(this, selection, this.tableData, this.selectRows);
+        this.selectRowsCount(this.selectRows)
       },
       search() {
+        this.changeSelectDataRangeAll();
         this.initTable();
       },
       buildPagePath(path) {
@@ -369,18 +353,24 @@
       },
       handleDeleteBatch() {
         // if (this.trashEnable) {
-          this.$alert(this.$t('api_test.definition.request.delete_confirm') + "？", '', {
-            confirmButtonText: this.$t('commons.confirm'),
-            callback: (action) => {
-              if (action === 'confirm') {
-                this.$post(this.getBatchDeleteParam(), this.buildBatchDeleteParam(), () => {
-                  this.selectRows.clear();
-                  this.initTable();
-                  this.$success(this.$t('commons.delete_success'));
-                });
-              }
+        this.$alert(this.$t('api_test.definition.request.delete_confirm') + "？", '', {
+          confirmButtonText: this.$t('commons.confirm'),
+          callback: (action) => {
+            if (action === 'confirm') {
+              let obj = {};
+              obj.projectId = getCurrentProjectID();
+              obj.selectAllDate = this.isSelectAllDate;
+              obj.unSelectIds = this.unSelection;
+              obj.ids = Array.from(this.selectRows).map(row => row.id);
+              obj = Object.assign(obj, this.condition);
+              this.$post('/api/testcase/deleteBatchByParam/', obj, () => {
+                this.selectRows.clear();
+                this.initTable();
+                this.$success(this.$t('commons.delete_success'));
+              });
             }
-          });
+          }
+        });
         // } else {
         //   this.$alert(this.$t('api_test.definition.request.delete_confirm') + "？", '', {
         //     confirmButtonText: this.$t('commons.confirm'),
@@ -397,23 +387,6 @@
         //   });
         // }
       },
-      buildBatchDeleteParam() {
-        if (this.isPlanModel) {
-          let request = {};
-          request.ids = Array.from(this.selectRows).map(row => row.id);
-          request.planId = this.planId;
-          return request;
-        } else {
-          return Array.from(this.selectRows).map(row => row.id);
-        }
-      },
-      getBatchDeleteParam() {
-        if (this.isPlanModel) {
-         return '/test/plan/api/case/batch/delete';
-        } else {
-          return '/api/testcase/deleteBatch/';
-        }
-      },
       handleEditBatch() {
         this.$refs.batchEdit.open();
       },
@@ -423,18 +396,22 @@
         let param = {};
         param[form.type] = form.value;
         param.ids = ids;
-        this.$post('/api/testcase/batch/edit', param, () => {
+        param.projectId = getCurrentProjectID();
+        param.selectAllDate = this.isSelectAllDate;
+        param.unSelectIds = this.unSelection;
+        param = Object.assign(param, this.condition);
+        this.$post('/api/testcase/batch/editByParam', param, () => {
           this.$success(this.$t('commons.save_success'));
           this.initTable();
         });
       },
       handleDelete(apiCase) {
         // if (this.trashEnable) {
-          this.$get(this.getDeleteUrl(apiCase), () => {
-            this.$success(this.$t('commons.delete_success'));
-            this.initTable();
-          });
-          return;
+        this.$get('/api/testcase/delete/' + apiCase.id, () => {
+          this.$success(this.$t('commons.delete_success'));
+          this.initTable();
+        });
+        return;
         // }
         // this.$alert(this.$t('api_test.definition.request.delete_confirm') + ' ' + apiCase.name + " ？", '', {
         //   confirmButtonText: this.$t('commons.confirm'),
@@ -449,16 +426,123 @@
         //   }
         // });
       },
-      getProjectId() {
-        if (!this.isRelevanceModel) {
-          return getCurrentProjectID();
-        } else {
-          return this.relevanceProjectId;
-        }
-      },
       setEnvironment(data) {
         this.environmentId = data.id;
-      }
+      },
+      selectRowsCount(selection) {
+        let selectedIDs = this.getIds(selection);
+        let allIDs = this.tableData.map(s => s.id);
+        this.unSelection = allIDs.filter(function (val) {
+          return selectedIDs.indexOf(val) === -1
+        });
+        if (this.isSelectAllDate) {
+          this.selectDataCounts = this.total - this.unSelection.length;
+        } else {
+          this.selectDataCounts = selection.size;
+        }
+      },
+      isSelectDataAll(dataType) {
+        this.isSelectAllDate = dataType;
+        this.selectRowsCount(this.selectRows)
+        //如果已经全选，不需要再操作了
+        if (this.selectRows.size != this.tableData.length) {
+          this.$refs.caseTable.toggleAllSelection(true);
+        }
+      },
+      //判断是否只显示本周的数据。  从首页跳转过来的请求会带有相关参数
+      isSelectThissWeekData() {
+        this.selectDataRange = "all";
+        let routeParam = this.$route.params.dataSelectRange;
+        let dataType = this.$route.params.dataType;
+        if (dataType === 'apiTestCase') {
+          this.selectDataRange = routeParam;
+        }
+      },
+      changeSelectDataRangeAll() {
+        this.$emit("changeSelectDataRangeAll", "testCase");
+      },
+      getIds(rowSets) {
+        let rowArray = Array.from(rowSets)
+        let ids = rowArray.map(s => s.id);
+        return ids;
+      },
+      showCaseRef(row) {
+        this.$refs.viewRef.open(row);
+      },
+      showEnvironment(row) {
+
+        let projectID = getCurrentProjectID();
+        if (this.projectId) {
+          this.$get('/api/environment/list/' + this.projectId, response => {
+            this.environments = response.data;
+            this.environments.forEach(environment => {
+              parseEnvironment(environment);
+            });
+          });
+        } else {
+          this.environment = undefined;
+        }
+        this.clickRow = row;
+        this.$refs.setEnvironment.open(row);
+      },
+      createPerformance(row, environment) {
+        /**
+         * 思路：调用后台创建性能测试的方法，把当前案例的hashTree在后台转化为jmx并文件创建性能测试。
+         * 然后跳转到修改性能测试的页面
+         *
+         * 性能测试保存地址： performance/save
+         *
+         */
+        if (!environment) {
+          this.$warning(this.$t('api_test.environment.select_environment'));
+          return;
+        }
+        let runData = [];
+        let singleLoading = true;
+        row.request = JSON.parse(row.request);
+        row.request.name = row.id;
+        row.request.useEnvironment = environment.id;
+        runData.push(row.request);
+        /*触发执行操作*/
+        let testPlan = new TestPlan();
+        let threadGroup = new ThreadGroup();
+        threadGroup.hashTree = [];
+        testPlan.hashTree = [threadGroup];
+        runData.forEach(item => {
+          threadGroup.hashTree.push(item);
+        })
+        let reqObj = {
+          id: row.id,
+          testElement: testPlan,
+          name: row.name,
+          projectId: getCurrentProjectID(),
+        };
+        let bodyFiles = getBodyUploadFiles(reqObj, runData);
+        reqObj.reportId = "run";
+
+        let url = "/api/genPerformanceTestXml";
+
+        this.$fileUpload(url, null, bodyFiles, reqObj, response => {
+          let jmxObj = {};
+          jmxObj.name = response.data.name;
+          jmxObj.xml = response.data.xml;
+          this.$store.commit('setTest', {
+            name: row.name,
+            jmx: jmxObj
+          })
+          this.$router.push({
+            path: "/performance/test/create"
+          })
+          // let performanceId = response.data;
+          // if(performanceId!=null){
+          //   this.$router.push({
+          //     path: "/performance/test/edit/"+performanceId,
+          //   })
+          // }
+        }, erro => {
+          this.$emit('runRefresh', {});
+        });
+      },
     },
   }
 </script>
@@ -482,7 +566,15 @@
     float: right;
     width: 300px;
     /*margin-bottom: 20px;*/
-    margin-right: 20px;
+    margin-right: 10px;
+  }
+
+  .ms-select-all >>> th:first-child {
+    margin-top: 20px;
+  }
+
+  .ms-select-all >>> th:nth-child(2) .el-icon-arrow-down {
+    top: -2px;
   }
 
 </style>

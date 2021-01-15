@@ -1,6 +1,6 @@
 <template>
   <div v-if="visible">
-    <ms-drawer :size="40" @close="apiCaseClose" direction="bottom">
+    <ms-drawer :size="60" @close="apiCaseClose" direction="bottom">
       <template v-slot:header>
         <api-case-header
           :api="api"
@@ -17,14 +17,15 @@
         />
       </template>
 
-      <el-container v-loading="result.loading" style="padding-bottom: 200px">
-        <el-main v-loading="batchLoading" style="overflow: auto">
+      <el-container v-loading="result.loading">
+        <el-main v-loading="batchLoading">
           <div v-for="(item,index) in apiCaseList" :key="index">
             <api-case-item v-loading="singleLoading && singleRunId === item.id"
                            @refresh="refresh"
                            @singleRun="singleRun"
                            @copyCase="copyCase"
                            @showExecResult="showExecResult"
+                           :environment="environment"
                            :is-case-edit="isCaseEdit"
                            :api="api"
                            :api-case="item" :index="index"/>
@@ -45,9 +46,10 @@
   import ApiCaseHeader from "./ApiCaseHeader";
   import ApiCaseItem from "./ApiCaseItem";
   import MsRun from "../Run";
-  import {downloadFile, getUUID, getCurrentProjectID} from "@/common/js/utils";
+  import {getCurrentProjectID, getUUID} from "@/common/js/utils";
   import MsDrawer from "../../../../common/components/MsDrawer";
-  import {PRIORITY} from "../../model/JsonData";
+  import {CASE_ORDER} from "../../model/JsonData";
+  import {API_CASE_CONFIGS} from "@/business/components/common/components/search/search-components";
 
   export default {
     name: 'ApiCaseList',
@@ -56,7 +58,6 @@
       MsRun,
       ApiCaseHeader,
       ApiCaseItem,
-
     },
     props: {
       createCase: String,
@@ -73,7 +74,7 @@
         environment: {},
         isReadOnly: false,
         selectedEvent: Object,
-        priorities: PRIORITY,
+        priorities: CASE_ORDER,
         apiCaseList: [],
         batchLoading: false,
         singleLoading: false,
@@ -84,7 +85,9 @@
         testCaseId: "",
         checkedCases: new Set(),
         visible: false,
-        condition: {},
+        condition: {
+          components: API_CASE_CONFIGS
+        },
         api: {}
       }
     },
@@ -117,7 +120,8 @@
         this.api = api;
         // testCaseId 不为空则为用例编辑页面
         this.testCaseId = testCaseId;
-        this.getApiTest();
+        this.condition = {components: API_CASE_CONFIGS};
+        this.getApiTest(true);
         this.visible = true;
       },
       setEnvironment(environment) {
@@ -141,7 +145,7 @@
         this.visible = false;
       },
 
-      runRefresh(data) {
+      runRefresh() {
         this.batchLoading = false;
         this.singleLoading = false;
         this.singleRunId = "";
@@ -150,12 +154,12 @@
         this.$emit('refresh');
       },
 
-      refresh(data) {
+      refresh() {
         this.getApiTest();
         this.$emit('refresh');
       },
 
-      getApiTest() {
+      getApiTest(addCase) {
         if (this.api) {
           this.condition.projectId = this.projectId;
           if (this.isCaseEdit) {
@@ -172,9 +176,15 @@
               }
             }
             this.apiCaseList = response.data;
-            // if (this.apiCaseList.length == 0) {
-            //   this.addCase();
-            // }
+            if (addCase && this.apiCaseList.length == 0 && !this.loaded) {
+              this.addCase();
+            }
+            this.apiCaseList.forEach(apiCase => {
+              if (apiCase.tags && apiCase.tags.length > 0) {
+                apiCase.tags = JSON.parse(apiCase.tags);
+              }
+            })
+
           });
         }
       },
@@ -187,7 +197,7 @@
           } else {
             request = JSON.parse(this.api.request);
           }
-          let obj = {apiDefinitionId: this.api.id, name: '', priority: 'P0', active: false};
+          let obj = {apiDefinitionId: this.api.id, name: '', priority: 'P0', active: true, tags: []};
           obj.request = request;
           this.apiCaseList.unshift(obj);
         }
@@ -243,11 +253,15 @@
         } else {
           this.$warning("没有可执行的用例！");
         }
-      }
+      },
     }
   }
 </script>
 
 <style scoped>
+
+  .ms-drawer >>> .ms-drawer-body {
+    margin-top: 80px;
+  }
 
 </style>

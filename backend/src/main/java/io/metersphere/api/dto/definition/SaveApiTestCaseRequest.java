@@ -35,4 +35,6 @@ public class SaveApiTestCaseRequest {
     private Long updateTime;
 
     private List<String> bodyUploadIds;
+
+    private String tags;
 }

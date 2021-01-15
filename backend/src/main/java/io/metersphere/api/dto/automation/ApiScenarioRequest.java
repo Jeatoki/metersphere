@@ -18,9 +18,13 @@ public class ApiScenarioRequest {
     private String name;
     private String workspaceId;
     private String userId;
+    private String planId;
     private boolean recent = false;
     private List<OrderRequest> orders;
     private List<String> filters;
     private Map<String, Object> combine;
     private List<String> ids;
+    private boolean isSelectThisWeedData;
+    private long createTime = 0;
+    private String executeStatus;
 }

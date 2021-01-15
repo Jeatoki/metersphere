@@ -13,12 +13,12 @@
                     <el-option v-for="(environment, index) in environments" :key="index"
                                :label="environment.name + (environment.config.httpConfig.socket ? (': ' + environment.config.httpConfig.protocol + '://' + environment.config.httpConfig.socket) : '')"
                                :value="environment.id"/>
-                    <el-button class="environment-button" size="mini" type="primary" @click="openEnvironmentConfig">
+                    <el-button class="environment-button" size="small" type="primary" @click="openEnvironmentConfig">
                       {{ $t('api_test.environment.environment_config') }}
                     </el-button>
                     <template v-slot:empty>
                       <div class="empty-environment">
-                        <el-button class="environment-button" size="mini" type="primary" @click="openEnvironmentConfig">
+                        <el-button class="environment-button" size="small" type="primary" @click="openEnvironmentConfig">
                           {{ $t('api_test.environment.environment_config') }}
                         </el-button>
                       </div>
@@ -27,9 +27,9 @@
                 </el-form-item>
               </el-col>
               <el-col :span="8">
-                <el-form-item :label="$t('api_test.request.sql.dataSource')" prop="dataSource" style="margin-left: 10px">
-                  <el-select v-model="request.dataSource" size="small">
-                    <el-option v-for="(item, index) in databaseConfigsOptions" :key="index" :value="item" :label="item.name"/>
+                <el-form-item :label="$t('api_test.request.sql.dataSource')" prop="dataSourceId" style="margin-left: 10px">
+                  <el-select v-model="request.dataSourceId" size="small">
+                    <el-option v-for="(item, index) in databaseConfigsOptions" :key="index" :value="item.id" :label="item.name"/>
                   </el-select>
                 </el-form-item>
 
@@ -43,11 +43,11 @@
 
 
             <el-form-item :label="$t('api_test.request.sql.result_variable')" prop="resultVariable">
-              <el-input v-model="request.resultVariable" maxlength="300" show-word-limit/>
+              <el-input v-model="request.resultVariable" maxlength="300" show-word-limit size="small"/>
             </el-form-item>
 
             <el-form-item :label="$t('api_test.request.sql.variable_names')" prop="variableNames">
-              <el-input v-model="request.variableNames" maxlength="300" show-word-limit/>
+              <el-input v-model="request.variableNames" maxlength="300" show-word-limit size="small"/>
             </el-form-item>
 
             <el-tabs v-model="activeName">
@@ -63,21 +63,26 @@
             </el-tabs>
           </el-form>
         </div>
-        <div v-for="row in request.hashTree" :key="row.id" v-loading="isReloadData" style="margin-left: 20px;width: 100%">
-          <!-- 前置脚本 -->
-          <ms-jsr233-processor v-if="row.label ==='JSR223 PreProcessor'" @copyRow="copyRow" @remove="remove" :is-read-only="false" :title="$t('api_test.definition.request.pre_script')" style-type="color: #B8741A;background-color: #F9F1EA"
-                               :jsr223-processor="row"/>
-          <!--后置脚本-->
-          <ms-jsr233-processor v-if="row.label ==='JSR223 PostProcessor'" @copyRow="copyRow" @remove="remove" :is-read-only="false" :title="$t('api_test.definition.request.post_script')" style-type="color: #783887;background-color: #F2ECF3"
-                               :jsr223-processor="row"/>
-          <!--断言规则-->
-          <ms-api-assertions v-if="row.type==='Assertions'" @copyRow="copyRow" @remove="remove" :is-read-only="isReadOnly" :assertions="row"/>
-          <!--提取规则-->
-          <ms-api-extract :is-read-only="isReadOnly" @copyRow="copyRow" @remove="remove" v-if="row.type==='Extract'" :extract="row"/>
-
+        <div v-if="showScript">
+          <div v-for="row in request.hashTree" :key="row.id" v-loading="isReloadData" style="margin-left: 20px;width: 100%">
+            <!-- 前置脚本 -->
+            <ms-jsr233-processor v-if="row.label ==='JSR223 PreProcessor'" @copyRow="copyRow" @remove="remove" :is-read-only="false" :title="$t('api_test.definition.request.pre_script')" style-type="color: #B8741A;background-color: #F9F1EA"
+                                 :jsr223-processor="row"/>
+            <!--后置脚本-->
+            <ms-jsr233-processor v-if="row.label ==='JSR223 PostProcessor'" @copyRow="copyRow" @remove="remove" :is-read-only="false" :title="$t('api_test.definition.request.post_script')" style-type="color: #783887;background-color: #F2ECF3"
+                                 :jsr223-processor="row"/>
+            <!--断言规则-->
+            <div style="margin-top: 10px">
+              <ms-api-assertions v-if="row.type==='Assertions'" @copyRow="copyRow" @remove="remove" :is-read-only="isReadOnly" :assertions="row"/>
+            </div>
+            <!--提取规则-->
+            <div style="margin-top: 10px">
+              <ms-api-extract :is-read-only="isReadOnly" @copyRow="copyRow" @remove="remove" v-if="row.type==='Extract'" :extract="row"/>
+            </div>
+          </div>
         </div>
       </el-col>
-      <el-col :span="3" class="ms-left-cell">
+      <el-col :span="3" class="ms-left-cell" v-if="showScript">
 
         <el-button class="ms-left-buttion" size="small" style="color: #B8741A;background-color: #F9F1EA" @click="addPre">+{{$t('api_test.definition.request.pre_script')}}</el-button>
         <br/>
@@ -99,7 +104,6 @@
   import MsApiAssertions from "../../assertion/ApiAssertions";
   import MsApiExtract from "../../extract/ApiExtract";
   import ApiRequestMethodSelect from "../../collapse/ApiRequestMethodSelect";
-  import MsJsr233Processor from "../../processor/Jsr233Processor";
   import MsCodeEdit from "../../../../../common/components/MsCodeEdit";
   import MsApiScenarioVariables from "../../ApiScenarioVariables";
   import {createComponent} from "../../jmeter/components";
@@ -108,18 +112,24 @@
   import ApiEnvironmentConfig from "../../environment/ApiEnvironmentConfig";
   import {getCurrentProjectID} from "@/common/js/utils";
   import {getUUID} from "@/common/js/utils";
+  import MsJsr233Processor from "../../../../automation/scenario/Jsr233Processor";
 
   export default {
     name: "MsDatabaseConfig",
     components: {
+      MsJsr233Processor,
       MsApiScenarioVariables,
       MsCodeEdit,
-      MsJsr233Processor, ApiRequestMethodSelect, MsApiExtract, MsApiAssertions, MsApiKeyValue, ApiEnvironmentConfig
+      ApiRequestMethodSelect, MsApiExtract, MsApiAssertions, MsApiKeyValue, ApiEnvironmentConfig
     },
     props: {
       request: {},
       basisData: {},
       moduleOptions: Array,
+      showScript: {
+        type: Boolean,
+        default: true,
+      },
       isReadOnly: {
         type: Boolean,
         default: false
@@ -132,9 +142,14 @@
         isReloadData: false,
         activeName: "variables",
         rules: {
-          environmentId: [{required: true, message: this.$t('test_track.case.input_maintainer'), trigger: 'change'}],
-          dataSource: [{required: true, message: this.$t('api_test.request.sql.dataSource'), trigger: 'change'}],
+          environmentId: [{required: true, message: this.$t('api_test.definition.request.run_env'), trigger: 'change'}],
+          dataSourceId: [{required: true, message: this.$t('api_test.request.sql.dataSource'), trigger: 'change'}],
         },
+      }
+    },
+    watch: {
+      'request.dataSourceId'() {
+        this.setDataSource();
       }
     },
     created() {
@@ -167,7 +182,7 @@
         this.reload();
       },
       copyRow(row) {
-        let obj =JSON.parse(JSON.stringify(row));
+        let obj = JSON.parse(JSON.stringify(row));
         obj.id = getUUID();
         this.request.hashTree.push(obj);
         this.reload();
@@ -200,6 +215,16 @@
           this.environments.forEach(environment => {
             parseEnvironment(environment);
           });
+          let hasEnvironment = false;
+          for (let i in this.environments) {
+            if (this.environments[i].id === this.request.environmentId) {
+              hasEnvironment = true;
+              break;
+            }
+          }
+          if (!hasEnvironment) {
+            this.request.environmentId = undefined;
+          }
           this.initDataSource();
         });
       },
@@ -212,13 +237,22 @@
             this.databaseConfigsOptions = [];
             this.environments[i].config.databaseConfigs.forEach(item => {
               this.databaseConfigsOptions.push(item);
-            })
+            });
+            break;
+          }
+        }
+      },
+      setDataSource() {
+        for (let item of this.databaseConfigsOptions) {
+          if (this.request.dataSourceId === item.id) {
+            this.request.dataSource = item;
             break;
           }
         }
       },
       environmentChange(value) {
         this.request.dataSource = undefined;
+        this.request.dataSourceId = "";
         for (let i in this.environments) {
           if (this.environments[i].id === value) {
             this.databaseConfigsOptions = [];

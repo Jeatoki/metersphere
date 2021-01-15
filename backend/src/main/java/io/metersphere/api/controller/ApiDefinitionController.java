@@ -11,9 +11,11 @@ import io.metersphere.api.dto.definition.parse.ApiDefinitionImport;
 import io.metersphere.api.service.ApiDefinitionService;
 import io.metersphere.base.domain.ApiDefinition;
 import io.metersphere.commons.constants.RoleConstants;
+import io.metersphere.commons.json.JSONSchemaGenerator;
 import io.metersphere.commons.utils.PageUtils;
 import io.metersphere.commons.utils.Pager;
 import io.metersphere.commons.utils.SessionUtils;
+import io.metersphere.service.CheckPermissionService;
 import io.metersphere.track.request.testcase.ApiCaseRelevanceRequest;
 import org.apache.shiro.authz.annotation.Logical;
 import org.apache.shiro.authz.annotation.RequiresRoles;
@@ -30,6 +32,8 @@ import java.util.List;
 public class ApiDefinitionController {
     @Resource
     private ApiDefinitionService apiDefinitionService;
+    @Resource
+    private CheckPermissionService checkPermissionService;
 
     @PostMapping("/list/{goPage}/{pageSize}")
     public Pager<List<ApiDefinitionResult>> list(@PathVariable int goPage, @PathVariable int pageSize, @RequestBody ApiDefinitionRequest request) {
@@ -38,29 +42,59 @@ public class ApiDefinitionController {
         return PageUtils.setPageInfo(page, apiDefinitionService.list(request));
     }
 
+    @PostMapping("/list/relevance/{goPage}/{pageSize}")
+    public Pager<List<ApiDefinitionResult>> listRelevance(@PathVariable int goPage, @PathVariable int pageSize, @RequestBody ApiDefinitionRequest request) {
+        Page<Object> page = PageHelper.startPage(goPage, pageSize, true);
+        request.setWorkspaceId(SessionUtils.getCurrentWorkspaceId());
+        return PageUtils.setPageInfo(page, apiDefinitionService.listRelevance(request));
+    }
+
+    @PostMapping("/list/all")
+    public List<ApiDefinitionResult> list(@RequestBody ApiDefinitionRequest request) {
+        return apiDefinitionService.list(request);
+    }
+
     @PostMapping(value = "/create", consumes = {"multipart/form-data"})
+    @RequiresRoles(value = {RoleConstants.TEST_MANAGER, RoleConstants.TEST_USER}, logical = Logical.OR)
     public void create(@RequestPart("request") SaveApiDefinitionRequest request, @RequestPart(value = "files") List<MultipartFile> bodyFiles) {
+        checkPermissionService.checkProjectOwner(request.getProjectId());
         apiDefinitionService.create(request, bodyFiles);
     }
 
     @PostMapping(value = "/update", consumes = {"multipart/form-data"})
+    @RequiresRoles(value = {RoleConstants.TEST_MANAGER, RoleConstants.TEST_USER}, logical = Logical.OR)
     public void update(@RequestPart("request") SaveApiDefinitionRequest request, @RequestPart(value = "files") List<MultipartFile> bodyFiles) {
+        checkPermissionService.checkProjectOwner(request.getProjectId());
         apiDefinitionService.update(request, bodyFiles);
     }
 
     @GetMapping("/delete/{id}")
+    @RequiresRoles(value = {RoleConstants.TEST_MANAGER, RoleConstants.TEST_USER}, logical = Logical.OR)
     public void delete(@PathVariable String id) {
         apiDefinitionService.delete(id);
     }
 
     @PostMapping("/deleteBatch")
+    @RequiresRoles(value = {RoleConstants.TEST_MANAGER, RoleConstants.TEST_USER}, logical = Logical.OR)
     public void deleteBatch(@RequestBody List<String> ids) {
         apiDefinitionService.deleteBatch(ids);
     }
 
+    @PostMapping("/deleteBatchByParams")
+    public void deleteBatchByParams(@RequestBody ApiDefinitionBatchProcessingRequest request) {
+        apiDefinitionService.deleteByParams(request);
+    }
+
     @PostMapping("/removeToGc")
+    @RequiresRoles(value = {RoleConstants.TEST_MANAGER, RoleConstants.TEST_USER}, logical = Logical.OR)
     public void removeToGc(@RequestBody List<String> ids) {
         apiDefinitionService.removeToGc(ids);
+    }
+
+    @PostMapping("/removeToGcByParams")
+    @RequiresRoles(value = {RoleConstants.TEST_MANAGER, RoleConstants.TEST_USER}, logical = Logical.OR)
+    public void removeToGcByParams(@RequestBody ApiDefinitionBatchProcessingRequest request) {
+        apiDefinitionService.removeToGcByParams(request);
     }
 
     @PostMapping("/reduction")
@@ -115,8 +149,20 @@ public class ApiDefinitionController {
         apiDefinitionService.editApiBath(request);
     }
 
+    @PostMapping("/batch/editByParams")
+    @RequiresRoles(value = {RoleConstants.TEST_USER, RoleConstants.TEST_MANAGER}, logical = Logical.OR)
+    public void editByParams(@RequestBody ApiBatchRequest request) {
+        apiDefinitionService.editApiByParam(request);
+    }
+
     @PostMapping("/relevance")
     public void testPlanRelevance(@RequestBody ApiCaseRelevanceRequest request) {
         apiDefinitionService.testPlanRelevance(request);
     }
+
+    @PostMapping("/preview")
+    public String preview(@RequestBody String jsonSchema) {
+        return JSONSchemaGenerator.getJson(jsonSchema);
+    }
+
 }

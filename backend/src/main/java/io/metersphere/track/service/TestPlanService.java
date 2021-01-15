@@ -3,9 +3,13 @@ package io.metersphere.track.service;
 
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
+import io.metersphere.api.dto.automation.ApiScenarioDTO;
+import io.metersphere.api.dto.automation.ScenarioStatus;
+import io.metersphere.api.dto.automation.TestPlanScenarioRequest;
+import io.metersphere.api.dto.definition.ApiTestCaseRequest;
+import io.metersphere.api.dto.definition.TestPlanApiCaseDTO;
 import io.metersphere.base.domain.*;
 import io.metersphere.base.mapper.*;
-import io.metersphere.base.mapper.ext.ExtProjectMapper;
 import io.metersphere.base.mapper.ext.ExtTestCaseMapper;
 import io.metersphere.base.mapper.ext.ExtTestPlanMapper;
 import io.metersphere.base.mapper.ext.ExtTestPlanTestCaseMapper;
@@ -22,15 +26,14 @@ import io.metersphere.notice.service.NoticeSendService;
 import io.metersphere.service.SystemParameterService;
 import io.metersphere.track.Factory.ReportComponentFactory;
 import io.metersphere.track.domain.ReportComponent;
-import io.metersphere.track.dto.TestCaseReportMetricDTO;
-import io.metersphere.track.dto.TestPlanCaseDTO;
-import io.metersphere.track.dto.TestPlanDTO;
-import io.metersphere.track.dto.TestPlanDTOWithMetric;
+import io.metersphere.track.dto.*;
 import io.metersphere.track.request.testcase.PlanCaseRelevanceRequest;
 import io.metersphere.track.request.testcase.QueryTestPlanRequest;
 import io.metersphere.track.request.testplan.AddTestPlanRequest;
+import io.metersphere.track.request.testplan.LoadCaseRequest;
 import io.metersphere.track.request.testplancase.QueryTestPlanCaseRequest;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.session.ExecutorType;
 import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
@@ -63,8 +66,6 @@ public class TestPlanService {
     @Resource
     TestPlanTestCaseService testPlanTestCaseService;
     @Resource
-    ExtProjectMapper extProjectMapper;
-    @Resource
     TestCaseReportMapper testCaseReportMapper;
     @Resource
     TestPlanProjectMapper testPlanProjectMapper;
@@ -80,6 +81,12 @@ public class TestPlanService {
     private NoticeSendService noticeSendService;
     @Resource
     private SystemParameterService systemParameterService;
+    @Resource
+    private TestPlanApiCaseService testPlanApiCaseService;
+    @Resource
+    private TestPlanScenarioCaseService testPlanScenarioCaseService;
+    @Resource
+    private TestPlanLoadCaseService testPlanLoadCaseService;
 
     public synchronized void addTestPlan(AddTestPlanRequest testPlan) {
         if (getTestPlanByName(testPlan.getName()).size() > 0) {
@@ -101,6 +108,7 @@ public class TestPlanService {
         testPlan.setCreateTime(System.currentTimeMillis());
         testPlan.setUpdateTime(System.currentTimeMillis());
         testPlan.setCreator(SessionUtils.getUser().getId());
+        testPlan.setProjectId(SessionUtils.getCurrentProjectId());
         testPlanMapper.insert(testPlan);
 
         List<String> userIds = new ArrayList<>();
@@ -167,8 +175,16 @@ public class TestPlanService {
     }
 
     private void editTestPlanProject(TestPlanDTO testPlan) {
+        // 将要进行关联的项目ID
         List<String> projectIds = testPlan.getProjectIds();
+        // 如果将要关联的项目ID中包含测试计划所属ID则进行剔除
         if (!CollectionUtils.isEmpty(projectIds)) {
+            if (projectIds.contains(testPlan.getProjectId())) {
+                projectIds.remove(testPlan.getProjectId());
+            }
+        }
+        // todo 优化； TestPlanList intoPlan 方法会触发此更新
+        if (StringUtils.isNotBlank(testPlan.getProjectId())) {
             TestPlanProjectExample testPlanProjectExample1 = new TestPlanProjectExample();
             testPlanProjectExample1.createCriteria().andTestPlanIdEqualTo(testPlan.getId());
             List<TestPlanProject> testPlanProjects = testPlanProjectMapper.selectByExample(testPlanProjectExample1);
@@ -185,22 +201,40 @@ public class TestPlanService {
             });
 
             TestPlanProjectExample testPlanProjectExample = new TestPlanProjectExample();
-            testPlanProjectExample.createCriteria().andTestPlanIdEqualTo(testPlan.getId()).andProjectIdNotIn(projectIds);
+            TestPlanProjectExample.Criteria criteria1 = testPlanProjectExample.createCriteria();
+            criteria1.andTestPlanIdEqualTo(testPlan.getId());
+            if (!CollectionUtils.isEmpty(projectIds)) {
+                criteria1.andProjectIdNotIn(projectIds);
+            }
             testPlanProjectMapper.deleteByExample(testPlanProjectExample);
 
             // 关联的项目下的用例idList
-            TestCaseExample example = new TestCaseExample();
-            example.createCriteria().andProjectIdIn(projectIds);
-            List<TestCase> caseList = testCaseMapper.selectByExample(example);
-            List<String> caseIds = caseList.stream().map(TestCase::getId).collect(Collectors.toList());
+            List<String> caseIds = null;
+            // 测试计划所属项目下的用例不解除关联
+            projectIds.add(testPlan.getProjectId());
+            if (!CollectionUtils.isEmpty(projectIds)) {
+                TestCaseExample example = new TestCaseExample();
+                example.createCriteria().andProjectIdIn(projectIds);
+                List<TestCase> caseList = testCaseMapper.selectByExample(example);
+                caseIds = caseList.stream().map(TestCase::getId).collect(Collectors.toList());
+            }
 
-            // 取消关联所属项目下的用例和计划的关系
+            // 取消关联项目下的用例和计划的关系
             TestPlanTestCaseExample testPlanTestCaseExample = new TestPlanTestCaseExample();
             TestPlanTestCaseExample.Criteria criteria = testPlanTestCaseExample.createCriteria().andPlanIdEqualTo(testPlan.getId());
             if (!CollectionUtils.isEmpty(caseIds)) {
                 criteria.andCaseIdNotIn(caseIds);
             }
             testPlanTestCaseMapper.deleteByExample(testPlanTestCaseExample);
+
+            List<String> relevanceProjectIds = new ArrayList<>();
+            relevanceProjectIds.add(testPlan.getProjectId());
+            if (!CollectionUtils.isEmpty(testPlan.getProjectIds())) {
+                relevanceProjectIds.addAll(testPlan.getProjectIds());
+            }
+            testPlanApiCaseService.deleteByRelevanceProjectIds(testPlan.getId(), relevanceProjectIds);
+            testPlanScenarioCaseService.deleteByRelevanceProjectIds(testPlan.getId(), relevanceProjectIds);
+            testPlanLoadCaseService.deleteByRelevanceProjectIds(testPlan.getId(), relevanceProjectIds);
         }
     }
 
@@ -259,6 +293,8 @@ public class TestPlanService {
         TestPlan testPlan = getTestPlan(planId);
         deleteTestCaseByPlanId(planId);
         testPlanProjectService.deleteTestPlanProjectByPlanId(planId);
+        testPlanApiCaseService.deleteByPlanId(planId);
+        testPlanScenarioCaseService.deleteByPlanId(planId);
         int num = testPlanMapper.deleteByPrimaryKey(planId);
         List<String> relatedUsers = new ArrayList<>();
         AddTestPlanRequest testPlans = new AddTestPlanRequest();
@@ -291,35 +327,44 @@ public class TestPlanService {
     }
 
     private void calcTestPlanRate(List<TestPlanDTOWithMetric> testPlans) {
-        List<String> projectIds = extProjectMapper.getProjectIdByWorkspaceId(SessionUtils.getCurrentWorkspaceId());
-        Map<String, List<TestPlanCaseDTO>> testCaseMap = new HashMap<>();
-        listTestCaseByProjectIds(projectIds).forEach(testCase -> {
-            List<TestPlanCaseDTO> list = testCaseMap.get(testCase.getPlanId());
-            if (list == null) {
-                list = new ArrayList<>();
-                list.add(testCase);
-                testCaseMap.put(testCase.getPlanId(), list);
-            } else {
-                list.add(testCase);
-            }
-        });
         testPlans.forEach(testPlan -> {
-            List<TestPlanCaseDTO> testCases = testCaseMap.get(testPlan.getId());
             testPlan.setTested(0);
             testPlan.setPassed(0);
             testPlan.setTotal(0);
-            if (testCases != null) {
-                testPlan.setTotal(testCases.size());
-                testCases.forEach(testCase -> {
-                    if (!StringUtils.equals(testCase.getStatus(), TestPlanTestCaseStatus.Prepare.name())
-                            && !StringUtils.equals(testCase.getStatus(), TestPlanTestCaseStatus.Underway.name())) {
-                        testPlan.setTested(testPlan.getTested() + 1);
-                        if (StringUtils.equals(testCase.getStatus(), TestPlanTestCaseStatus.Pass.name())) {
-                            testPlan.setPassed(testPlan.getPassed() + 1);
-                        }
+
+            List<String> functionalExecResults = extTestPlanTestCaseMapper.getExecResultByPlanId(testPlan.getId());
+            functionalExecResults.forEach(item -> {
+                if (!StringUtils.equals(item, TestPlanTestCaseStatus.Prepare.name())
+                        && !StringUtils.equals(item, TestPlanTestCaseStatus.Underway.name())) {
+                    testPlan.setTested(testPlan.getTested() + 1);
+                    if (StringUtils.equals(item, TestPlanTestCaseStatus.Pass.name())) {
+                        testPlan.setPassed(testPlan.getPassed() + 1);
                     }
-                });
-            }
+                }
+            });
+
+            List<String> apiExecResults = testPlanApiCaseService.getExecResultByPlanId(testPlan.getId());
+            apiExecResults.forEach(item -> {
+                if (StringUtils.isNotBlank(item)) {
+                    testPlan.setTested(testPlan.getTested() + 1);
+                    if (StringUtils.equals(item, "success")) {
+                        testPlan.setPassed(testPlan.getPassed() + 1);
+                    }
+                }
+            });
+
+            List<String> scenarioExecResults = testPlanScenarioCaseService.getExecResultByPlanId(testPlan.getId());
+            scenarioExecResults.forEach(item -> {
+                if (StringUtils.isNotBlank(item)) {
+                    testPlan.setTested(testPlan.getTested() + 1);
+                    if (StringUtils.equals(item, ScenarioStatus.Success.name())) {
+                        testPlan.setPassed(testPlan.getPassed() + 1);
+                    }
+                }
+            });
+
+            testPlan.setTotal(apiExecResults.size() + scenarioExecResults.size() + functionalExecResults.size());
+
             testPlan.setPassRate(MathUtils.getPercentWithDecimal(testPlan.getTested() == 0 ? 0 : testPlan.getPassed() * 1.0 / testPlan.getTested()));
             testPlan.setTestRate(MathUtils.getPercentWithDecimal(testPlan.getTotal() == 0 ? 0 : testPlan.getTested() * 1.0 / testPlan.getTotal()));
         });
@@ -336,8 +381,9 @@ public class TestPlanService {
         return testPlans;
     }
 
-    public List<TestPlanDTO> listTestPlanByProject(QueryTestPlanRequest request) {
-        return extTestPlanMapper.planList(request);
+    public List<TestPlanDTOWithMetric> listTestPlanByProject(QueryTestPlanRequest request) {
+        List<TestPlanDTOWithMetric> testPlans=extTestPlanMapper.list(request);
+        return testPlans;
     }
 
     public void testPlanRelevance(PlanCaseRelevanceRequest request) {
@@ -396,13 +442,13 @@ public class TestPlanService {
         if (StringUtils.isBlank(currentWorkspaceId)) {
             return null;
         }
-        TestPlanProjectExample testPlanProjectExample = new TestPlanProjectExample();
-        TestPlanProjectExample.Criteria criteria = testPlanProjectExample.createCriteria();
         if (StringUtils.isNotBlank(SessionUtils.getCurrentProjectId())) {
+            TestPlanExample testPlanExample = new TestPlanExample();
+            TestPlanExample.Criteria criteria = testPlanExample.createCriteria();
             criteria.andProjectIdEqualTo(SessionUtils.getCurrentProjectId());
-            List<TestPlanProject> testPlanProjects = testPlanProjectMapper.selectByExample(testPlanProjectExample);
-            if (!CollectionUtils.isEmpty(testPlanProjects)) {
-                List<String> testPlanIds = testPlanProjects.stream().map(TestPlanProject::getTestPlanId).collect(Collectors.toList());
+            List<TestPlan> testPlans = testPlanMapper.selectByExample(testPlanExample);
+            if (!CollectionUtils.isEmpty(testPlans)) {
+                List<String> testPlanIds = testPlans.stream().map(TestPlan::getId).collect(Collectors.toList());
                 TestPlanExample testPlanTestCaseExample = new TestPlanExample();
                 testPlanTestCaseExample.createCriteria().andWorkspaceIdEqualTo(currentWorkspaceId)
                         .andIdIn(testPlanIds)
@@ -415,18 +461,18 @@ public class TestPlanService {
     }
 
     public List<TestPlan> listTestAllPlan(String currentWorkspaceId) {
-        TestPlanProjectExample testPlanProjectExample = new TestPlanProjectExample();
-        TestPlanProjectExample.Criteria criteria = testPlanProjectExample.createCriteria();
         if (StringUtils.isNotBlank(SessionUtils.getCurrentProjectId())) {
+            TestPlanExample testPlanExample = new TestPlanExample();
+            TestPlanExample.Criteria criteria = testPlanExample.createCriteria();
             criteria.andProjectIdEqualTo(SessionUtils.getCurrentProjectId());
-            List<TestPlanProject> testPlanProjects = testPlanProjectMapper.selectByExample(testPlanProjectExample);
-            if (!CollectionUtils.isEmpty(testPlanProjects)) {
-                List<String> testPlanIds = testPlanProjects.stream().map(TestPlanProject::getTestPlanId).collect(Collectors.toList());
-                TestPlanExample testPlanExample = new TestPlanExample();
-                TestPlanExample.Criteria testPlanCriteria = testPlanExample.createCriteria();
+            List<TestPlan> testPlans = testPlanMapper.selectByExample(testPlanExample);
+            if (!CollectionUtils.isEmpty(testPlans)) {
+                List<String> testPlanIds = testPlans.stream().map(TestPlan::getId).collect(Collectors.toList());
+                TestPlanExample testPlanExample1 = new TestPlanExample();
+                TestPlanExample.Criteria testPlanCriteria = testPlanExample1.createCriteria();
                 testPlanCriteria.andWorkspaceIdEqualTo(currentWorkspaceId);
                 testPlanCriteria.andIdIn(testPlanIds);
-                return testPlanMapper.selectByExample(testPlanExample);
+                return testPlanMapper.selectByExample(testPlanExample1);
             }
         }
 
@@ -459,7 +505,6 @@ public class TestPlanService {
     }
 
     public TestCaseReportMetricDTO getMetric(String planId) {
-        IssuesService issuesService = (IssuesService) CommonBeanFactory.getBean("issuesService");
         QueryTestPlanRequest queryTestPlanRequest = new QueryTestPlanRequest();
         queryTestPlanRequest.setId(planId);
 
@@ -472,31 +517,8 @@ public class TestPlanService {
         JSONArray componentIds = content.getJSONArray("components");
 
         List<ReportComponent> components = ReportComponentFactory.createComponents(componentIds.toJavaList(String.class), testPlan);
+        List<Issues> issues = buildFunctionalCaseReport(planId, components);
 
-        List<TestPlanCaseDTO> testPlanTestCases = listTestCaseByPlanId(planId);
-        List<Issues> issues = new ArrayList<>();
-        for (TestPlanCaseDTO testCase : testPlanTestCases) {
-            List<Issues> issue = issuesService.getIssues(testCase.getCaseId());
-            if (issue.size() > 0) {
-                for (Issues i : issue) {
-                    i.setModel(testCase.getNodePath());
-                    i.setProjectName(testCase.getProjectName());
-                    String des = i.getDescription().replaceAll("<p>", "").replaceAll("</p>", "");
-                    i.setDescription(des);
-                    if (i.getLastmodify() == null || i.getLastmodify() == "") {
-                        if (i.getReporter() != null || i.getReporter() != "") {
-                            i.setLastmodify(i.getReporter());
-                        }
-                    }
-                }
-                issues.addAll(issue);
-                Collections.sort(issues, Comparator.comparing(Issues::getCreateTime, (t1, t2) -> t2.compareTo(t1)));
-            }
-
-            components.forEach(component -> {
-                component.readRecord(testCase);
-            });
-        }
         TestCaseReportMetricDTO testCaseReportMetricDTO = new TestCaseReportMetricDTO();
         components.forEach(component -> {
             component.afterBuild(testCaseReportMetricDTO);
@@ -609,4 +631,101 @@ public class TestPlanService {
         return context;
     }
 
+    public TestCaseReportMetricDTO getStatisticsMetric(String planId) {
+        QueryTestPlanRequest queryTestPlanRequest = new QueryTestPlanRequest();
+        queryTestPlanRequest.setId(planId);
+
+        TestPlanDTO testPlan = extTestPlanMapper.list(queryTestPlanRequest).get(0);
+        String projectName = getProjectNameByPlanId(planId);
+        testPlan.setProjectName(projectName);
+
+        TestCaseReport testCaseReport = testCaseReportMapper.selectByPrimaryKey(testPlan.getReportId());
+        JSONObject content = JSONObject.parseObject(testCaseReport.getContent());
+        JSONArray componentIds = content.getJSONArray("components");
+
+        List<ReportComponent> components = ReportComponentFactory.createComponents(componentIds.toJavaList(String.class), testPlan);
+        List<Issues> issues = buildFunctionalCaseReport(planId, components);
+        buildApiCaseReport(planId, components);
+        buildScenarioCaseReport(planId, components);
+        buildLoadCaseReport(planId, components);
+
+        TestCaseReportMetricDTO testCaseReportMetricDTO = new TestCaseReportMetricDTO();
+        components.forEach(component -> {
+            component.afterBuild(testCaseReportMetricDTO);
+        });
+        testCaseReportMetricDTO.setIssues(issues);
+        return testCaseReportMetricDTO;
+    }
+
+    public void buildApiCaseReport(String planId, List<ReportComponent> components) {
+        ApiTestCaseRequest request = new ApiTestCaseRequest();
+        request.setPlanId(planId);
+        List<TestPlanApiCaseDTO> apiCaseDTOS = testPlanApiCaseService.list(request);
+        for (TestPlanApiCaseDTO item : apiCaseDTOS) {
+            for (ReportComponent component : components) {
+                component.readRecord(item);
+            }
+        }
+    }
+
+    public void buildScenarioCaseReport(String planId, List<ReportComponent> components) {
+        TestPlanScenarioRequest request = new TestPlanScenarioRequest();
+        request.setPlanId(planId);
+        List<ApiScenarioDTO> scenarioDTOS = testPlanScenarioCaseService.list(request);
+        for (ApiScenarioDTO item : scenarioDTOS) {
+            for (ReportComponent component : components) {
+                component.readRecord(item);
+            }
+        }
+    }
+
+    public void buildLoadCaseReport(String planId, List<ReportComponent> components) {
+        LoadCaseRequest request = new LoadCaseRequest();
+        request.setTestPlanId(planId);
+        List<TestPlanLoadCaseDTO> loadDTOs = testPlanLoadCaseService.list(request);
+        for (TestPlanLoadCaseDTO item : loadDTOs) {
+            for (ReportComponent component : components) {
+                component.readRecord(item);
+            }
+        }
+    }
+
+    public List<Issues> buildFunctionalCaseReport(String planId, List<ReportComponent> components) {
+        IssuesService issuesService = (IssuesService) CommonBeanFactory.getBean("issuesService");
+        List<TestPlanCaseDTO> testPlanTestCases = listTestCaseByPlanId(planId);
+        List<Issues> issues = new ArrayList<>();
+        for (TestPlanCaseDTO testCase : testPlanTestCases) {
+            List<Issues> issue = issuesService.getIssues(testCase.getCaseId());
+            if (issue.size() > 0) {
+                for (Issues i : issue) {
+                    i.setModel(testCase.getNodePath());
+                    i.setProjectName(testCase.getProjectName());
+                    String des = i.getDescription().replaceAll("<p>", "").replaceAll("</p>", "");
+                    i.setDescription(des);
+                    if (i.getLastmodify() == null || i.getLastmodify() == "") {
+                        if (i.getReporter() != null || i.getReporter() != "") {
+                            i.setLastmodify(i.getReporter());
+                        }
+                    }
+                }
+                issues.addAll(issue);
+                Collections.sort(issues, Comparator.comparing(Issues::getCreateTime, (t1, t2) -> t2.compareTo(t1)));
+            }
+            components.forEach(component -> {
+                component.readRecord(testCase);
+            });
+        }
+        return issues;
+    }
+    public List<TestPlanDTO> selectTestPlanByRelevancy(QueryTestPlanRequest params){
+        return  extTestPlanMapper.selectTestPlanByRelevancy(params);
+    }
+
+    public String findTestProjectNameByTestPlanID(String testPlanId) {
+        return  extTestPlanMapper.findTestProjectNameByTestPlanID(testPlanId);
+    }
+
+    public String findScheduleCreateUserById(String testPlanId) {
+        return extTestPlanMapper.findScheduleCreateUserById(testPlanId);
+    }
 }

@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div style="margin-bottom: 20px">
     <span class="kv-description" v-if="description">
       {{ description }}
     </span>

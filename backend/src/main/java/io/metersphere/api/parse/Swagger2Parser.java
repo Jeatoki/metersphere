@@ -11,10 +11,8 @@ import io.metersphere.api.dto.definition.response.HttpResponse;
 import io.metersphere.api.dto.scenario.Body;
 import io.metersphere.api.dto.scenario.KeyValue;
 import io.metersphere.api.dto.scenario.request.RequestType;
-import io.metersphere.api.service.ApiModuleService;
 import io.metersphere.base.domain.ApiModule;
 import io.metersphere.commons.constants.SwaggerParameterType;
-import io.metersphere.commons.utils.CommonBeanFactory;
 import io.swagger.models.*;
 import io.swagger.models.parameters.*;
 import io.swagger.models.properties.*;
@@ -25,31 +23,41 @@ import org.apache.commons.lang3.StringUtils;
 import java.io.InputStream;
 import java.util.*;
 
-public class Swagger2Parser extends ApiImportAbstractParser {
+public class Swagger2Parser extends SwaggerAbstractParser {
 
     private Map<String, Model> definitions = null;
 
     @Override
     public ApiDefinitionImport parse(InputStream source, ApiTestImportRequest request) {
         Swagger swagger;
+        String sourceStr = "";
         if (StringUtils.isNotBlank(request.getSwaggerUrl())) {
             swagger = new SwaggerParser().read(request.getSwaggerUrl());
         } else {
-            swagger = new SwaggerParser().readWithInfo(getApiTestStr(source)).getSwagger();
+            sourceStr = getApiTestStr(source);
+            swagger = new SwaggerParser().readWithInfo(sourceStr).getSwagger();
         }
+
+        if (swagger == null || swagger.getSwagger() == null) {
+            Swagger3Parser swagger3Parser = new Swagger3Parser();
+            return swagger3Parser.parse(sourceStr, request);
+        }
+
         ApiDefinitionImport definitionImport = new ApiDefinitionImport();
         this.projectId = request.getProjectId();
-        definitionImport.setData(parseRequests(swagger, request.isSaved()));
+        definitionImport.setData(parseRequests(swagger, request));
         return definitionImport;
     }
 
-    private List<ApiDefinitionResult> parseRequests(Swagger swagger, boolean isSaved) {
+    private List<ApiDefinitionResult> parseRequests(Swagger swagger, ApiTestImportRequest importRequest) {
         Map<String, Path> paths = swagger.getPaths();
         Set<String> pathNames = paths.keySet();
 
         this.definitions = swagger.getDefinitions();
 
         List<ApiDefinitionResult> results = new ArrayList<>();
+
+        ApiModule parentNode = getSelectModule(importRequest.getModuleId());
 
         for (String pathName : pathNames) {
             Path path = paths.get(pathName);
@@ -62,7 +70,7 @@ public class Swagger2Parser extends ApiImportAbstractParser {
                 parseParameters(operation, request);
                 apiDefinition.setRequest(JSON.toJSONString(request));
                 apiDefinition.setResponse(JSON.toJSONString(parseResponse(operation.getResponses())));
-                buildModule(apiDefinition, operation, isSaved);
+                buildModule(parentNode, apiDefinition, operation.getTags(), importRequest.isSaved());
                 results.add(apiDefinition);
             }
         }
@@ -71,26 +79,14 @@ public class Swagger2Parser extends ApiImportAbstractParser {
         return results;
     }
 
-    private void buildModule(ApiDefinitionResult apiDefinition, Operation operation, boolean isSaved) {
-        List<String> tags = operation.getTags();
-        if (tags != null) {
-            tags.forEach(tag -> {
-                apiModuleService = CommonBeanFactory.getBean(ApiModuleService.class);
-                ApiModule module = apiModuleService.getNewModule(tag, this.projectId, 1);
-                if (isSaved) {
-                    createModule(module);
-                }
-                apiDefinition.setModuleId(module.getId());
-            });
-        }
-    }
-
     private ApiDefinitionResult buildApiDefinition(String id, Operation operation, String path, String method) {
         String name = "";
         if (StringUtils.isNotBlank(operation.getSummary())) {
             name = operation.getSummary();
-        } else {
+        } else  if (StringUtils.isNotBlank(operation.getOperationId())) {
             name = operation.getOperationId();
+        } else {
+            name = path;
         }
         return buildApiDefinition(id, name, path, method);
     }
@@ -144,27 +140,7 @@ public class Swagger2Parser extends ApiImportAbstractParser {
             return Body.RAW;
         }
         String contentType = operation.getConsumes().get(0);
-        String bodyType = "";
-        switch (contentType) {
-            case "application/x-www-form-urlencoded":
-                bodyType = Body.WWW_FROM;
-                break;
-            case "multipart/form-data":
-                bodyType = Body.FORM_DATA;
-                break;
-            case "application/json":
-                bodyType = Body.JSON;
-                break;
-            case "application/xml":
-                bodyType = Body.XML;
-                break;
-            case "":
-                bodyType = Body.BINARY;
-                break;
-            default:
-                bodyType = Body.RAW;
-        }
-        return bodyType;
+        return getBodyType(contentType);
     }
 
     private void parsePathParameters(Parameter parameter, List<KeyValue> rests) {
@@ -178,12 +154,13 @@ public class Swagger2Parser extends ApiImportAbstractParser {
 
     private void parseCookieParameters(Parameter parameter, List<KeyValue> headers) {
         CookieParameter cookieParameter = (CookieParameter) parameter;
-        addCookie(headers, cookieParameter.getName(), "", getDefaultStringValue(cookieParameter.getDescription()));
+        addCookie(headers, cookieParameter.getName(), "", getDefaultStringValue(cookieParameter.getDescription()), parameter.getRequired());
     }
 
     private void parseHeaderParameters(Parameter parameter, List<KeyValue> headers) {
         HeaderParameter headerParameter = (HeaderParameter) parameter;
-        addHeader(headers, headerParameter.getName(), "", getDefaultStringValue(headerParameter.getDescription()));
+        addHeader(headers, headerParameter.getName(), "", getDefaultStringValue(headerParameter.getDescription()),
+                "", parameter.getRequired());
     }
 
     private HttpResponse parseResponse(Map<String, Response> responses) {
@@ -243,16 +220,20 @@ public class Swagger2Parser extends ApiImportAbstractParser {
             //模型数组
             ArrayModel arrayModel = (ArrayModel) schema;
             Property items = arrayModel.getItems();
+            JSONArray propertyList = new JSONArray();
             if (items instanceof RefProperty) {
                 RefProperty refProperty = (RefProperty) items;
                 String simpleRef = refProperty.getSimpleRef();
                 HashSet<String> refSet = new HashSet<>();
                 refSet.add(simpleRef);
                 Model model = definitions.get(simpleRef);
-                JSONArray propertyList = new JSONArray();
-                propertyList.add(getBodyParameters(model.getProperties(), refSet));
-                return propertyList.toString();
+                if (model != null) {
+                    propertyList.add(getBodyParameters(model.getProperties(), refSet));
+                } else {
+                    propertyList.add(new JSONObject());
+                }
             }
+            return propertyList.toString();
         }
         return "";
     }
@@ -283,6 +264,17 @@ public class Swagger2Parser extends ApiImportAbstractParser {
                     } else {
                         jsonObject.put(key, new ArrayList<>());
                     }
+                } else if (value instanceof RefProperty) {
+                    RefProperty refProperty = (RefProperty) value;
+                    String simpleRef = refProperty.getSimpleRef();
+                    if (refSet.contains(simpleRef)) {
+                        //避免嵌套死循环
+                        jsonObject.put(key, new JSONArray());
+                        return;
+                    }
+                    refSet.add(simpleRef);
+                    Model model = definitions.get(simpleRef);
+                    jsonObject.put(key, getBodyParameters(model.getProperties(), refSet));
                 } else {
                     jsonObject.put(key, getDefaultValueByPropertyType(value));
                 }
@@ -305,7 +297,7 @@ public class Swagger2Parser extends ApiImportAbstractParser {
 
     private void parseFormDataParameters(FormParameter parameter, Body body) {
         List<KeyValue> keyValues = Optional.ofNullable(body.getKvs()).orElse(new ArrayList<>());
-        KeyValue kv = new KeyValue(parameter.getName(), "", getDefaultStringValue(parameter.getDescription()));
+        KeyValue kv = new KeyValue(parameter.getName(), "", getDefaultStringValue(parameter.getDescription()), parameter.getRequired());
         if (StringUtils.equals(parameter.getType(), "file")) {
             kv.setType("file");
         }
@@ -315,6 +307,6 @@ public class Swagger2Parser extends ApiImportAbstractParser {
 
     private void parseQueryParameters(Parameter parameter, List<KeyValue> arguments) {
         QueryParameter queryParameter = (QueryParameter) parameter;
-        arguments.add(new KeyValue(queryParameter.getName(), "", getDefaultStringValue(queryParameter.getDescription())));
+        arguments.add(new KeyValue(queryParameter.getName(), "", getDefaultStringValue(queryParameter.getDescription()), queryParameter.getRequired()));
     }
 }

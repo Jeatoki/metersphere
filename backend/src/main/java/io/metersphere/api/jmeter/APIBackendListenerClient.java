@@ -1,11 +1,10 @@
 package io.metersphere.api.jmeter;
 
+import io.metersphere.api.dto.scenario.request.RequestType;
 import io.metersphere.api.service.*;
+import io.metersphere.base.domain.ApiScenarioReport;
 import io.metersphere.base.domain.ApiTestReport;
-import io.metersphere.commons.constants.APITestStatus;
-import io.metersphere.commons.constants.ApiRunMode;
-import io.metersphere.commons.constants.NoticeConstants;
-import io.metersphere.commons.constants.TestPlanTestCaseStatus;
+import io.metersphere.commons.constants.*;
 import io.metersphere.commons.utils.CommonBeanFactory;
 import io.metersphere.commons.utils.LogUtil;
 import io.metersphere.dto.BaseSystemConfigDTO;
@@ -13,7 +12,9 @@ import io.metersphere.i18n.Translator;
 import io.metersphere.notice.sender.NoticeModel;
 import io.metersphere.notice.service.NoticeSendService;
 import io.metersphere.service.SystemParameterService;
+import io.metersphere.track.service.TestPlanReportService;
 import io.metersphere.track.service.TestPlanTestCaseService;
+import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.jmeter.assertions.AssertionResult;
 import org.apache.jmeter.protocol.http.sampler.HTTPSampleResult;
@@ -48,7 +49,10 @@ public class APIBackendListenerClient extends AbstractBackendListenerClient impl
 
     private ApiDefinitionExecResultService apiDefinitionExecResultService;
 
+    private TestPlanReportService testPlanReportService;
+
     private ApiScenarioReportService apiScenarioReportService;
+
 
     public String runMode = ApiRunMode.RUN.name();
 
@@ -90,6 +94,10 @@ public class APIBackendListenerClient extends AbstractBackendListenerClient impl
         apiDefinitionExecResultService = CommonBeanFactory.getBean(ApiDefinitionExecResultService.class);
         if (apiDefinitionExecResultService == null) {
             LogUtil.error("apiDefinitionExecResultService is required");
+        }
+        testPlanReportService = CommonBeanFactory.getBean(TestPlanReportService.class);
+        if (testPlanReportService == null) {
+            LogUtil.error("testPlanReportService is required");
         }
 
         apiScenarioReportService = CommonBeanFactory.getBean(ApiScenarioReportService.class);
@@ -155,27 +163,49 @@ public class APIBackendListenerClient extends AbstractBackendListenerClient impl
         testResult.getScenarios().addAll(scenarios.values());
         testResult.getScenarios().sort(Comparator.comparing(ScenarioResult::getId));
         ApiTestReport report = null;
+        String reportUrl = null;
         // 这部分后续优化只留 DELIMIT 和 SCENARIO 两部分
         if (StringUtils.equals(this.runMode, ApiRunMode.DEBUG.name())) {
             report = apiReportService.get(debugReportId);
             apiReportService.complete(testResult, report);
         } else if (StringUtils.equals(this.runMode, ApiRunMode.DELIMIT.name())) {
             // 调试操作，不需要存储结果
-            if (StringUtils.isBlank(debugReportId)) {
+            if (!StringUtils.isBlank(debugReportId)) {
                 apiDefinitionService.addResult(testResult);
             } else {
                 apiDefinitionService.addResult(testResult);
                 apiDefinitionExecResultService.saveApiResult(testResult, ApiRunMode.DELIMIT.name());
             }
-        } else if (StringUtils.equals(this.runMode, ApiRunMode.API_PLAN.name())) {
+        } else if (StringUtils.equalsAny(this.runMode, ApiRunMode.API_PLAN.name(), ApiRunMode.SCHEDULE_API_PLAN.name())) {
             apiDefinitionService.addResult(testResult);
-            apiDefinitionExecResultService.saveApiResult(testResult, ApiRunMode.API_PLAN.name());
-        } else if (StringUtils.equals(this.runMode, ApiRunMode.SCENARIO.name())) {
+
+            //测试计划定时任务-接口执行逻辑的话，需要同步测试计划的报告数据
+            if (StringUtils.equals(this.runMode, ApiRunMode.SCHEDULE_API_PLAN.name())) {
+                apiDefinitionExecResultService.saveApiResultByScheduleTask(testResult, ApiRunMode.SCHEDULE_API_PLAN.name());
+                List<String> testPlanReportIdList = new ArrayList<>();
+                testPlanReportIdList.add(debugReportId);
+                testPlanReportService.updateReport(testPlanReportIdList,ApiRunMode.SCHEDULE_API_PLAN.name());
+            }else {
+                apiDefinitionExecResultService.saveApiResult(testResult, ApiRunMode.API_PLAN.name());
+            }
+        } else if (StringUtils.equalsAny(this.runMode, ApiRunMode.SCENARIO.name(), ApiRunMode.SCENARIO_PLAN.name(), ApiRunMode.SCHEDULE_SCENARIO_PLAN.name())) {
             // 执行报告不需要存储，由用户确认后在存储
             testResult.setTestId(testId);
-            apiScenarioReportService.complete(testResult);
-        }
-        else {
+            ApiScenarioReport scenarioReport = apiScenarioReportService.complete(testResult, this.runMode);
+
+            report = new ApiTestReport();
+            report.setStatus(scenarioReport.getStatus());
+            report.setId(scenarioReport.getId());
+            report.setTriggerMode(scenarioReport.getTriggerMode());
+            report.setName(scenarioReport.getName());
+
+            SystemParameterService systemParameterService = CommonBeanFactory.getBean(SystemParameterService.class);
+            assert systemParameterService != null;
+            BaseSystemConfigDTO baseSystemConfigDTO = systemParameterService.getBaseInfo();
+            reportUrl = baseSystemConfigDTO.getUrl() + "/#/api/automation/report";
+
+            testResult.setTestId(scenarioReport.getScenarioId());
+        } else {
             apiTestService.changeStatus(testId, APITestStatus.Completed);
             report = apiReportService.getRunningReport(testResult.getTestId());
             apiReportService.complete(testResult, report);
@@ -197,32 +227,34 @@ public class APIBackendListenerClient extends AbstractBackendListenerClient impl
             }
         }
         try {
-            sendTask(report, testResult);
+            sendTask(report, reportUrl, testResult);
         } catch (Exception e) {
             LogUtil.error(e.getMessage(), e);
         }
 
     }
 
-    private static void sendTask(ApiTestReport report, TestResult testResult) {
+    private static void sendTask(ApiTestReport report, String reportUrl, TestResult testResult) {
         SystemParameterService systemParameterService = CommonBeanFactory.getBean(SystemParameterService.class);
         NoticeSendService noticeSendService = CommonBeanFactory.getBean(NoticeSendService.class);
         assert systemParameterService != null;
         assert noticeSendService != null;
 
         BaseSystemConfigDTO baseSystemConfigDTO = systemParameterService.getBaseInfo();
-        String url = baseSystemConfigDTO.getUrl() + "/#/api/report/view/" + report.getId();
-
+        String url = reportUrl;
+        if (StringUtils.isEmpty(url)) {
+            url = baseSystemConfigDTO.getUrl() + "/#/api/report/view/" + report.getId();
+        }
         String successContext = "";
         String failedContext = "";
         String subject = "";
         String event = "";
-        if (StringUtils.equals(NoticeConstants.Mode.API, report.getTriggerMode())) {
+        if (StringUtils.equals(ReportTriggerMode.API.name(), report.getTriggerMode())) {
             successContext = "接口测试 API任务通知:'" + report.getName() + "'执行成功" + "\n" + "请点击下面链接进入测试报告页面" + "\n" + url;
             failedContext = "接口测试 API任务通知:'" + report.getName() + "'执行失败" + "\n" + "请点击下面链接进入测试报告页面" + "\n" + url;
             subject = Translator.get("task_notification_jenkins");
         }
-        if (StringUtils.equals(NoticeConstants.Mode.SCHEDULE, report.getTriggerMode())) {
+        if (StringUtils.equals(ReportTriggerMode.SCHEDULE.name(), report.getTriggerMode())) {
             successContext = "接口测试定时任务通知:'" + report.getName() + "'执行成功" + "\n" + "请点击下面链接进入测试报告页面" + "\n" + url;
             failedContext = "接口测试定时任务通知:'" + report.getName() + "'执行失败" + "\n" + "请点击下面链接进入测试报告页面" + "\n" + url;
             subject = Translator.get("task_notification");
@@ -236,8 +268,9 @@ public class APIBackendListenerClient extends AbstractBackendListenerClient impl
         Map<String, Object> paramMap = new HashMap<>();
         paramMap.put("testName", report.getName());
         paramMap.put("id", report.getId());
-        paramMap.put("type", "performance");
+        paramMap.put("type", "api");
         paramMap.put("url", baseSystemConfigDTO.getUrl());
+        paramMap.put("status", report.getStatus());
         NoticeModel noticeModel = NoticeModel.builder()
                 .successContext(successContext)
                 .successMailTemplate("ApiSuccessfulNotification")
@@ -284,20 +317,14 @@ public class APIBackendListenerClient extends AbstractBackendListenerClient impl
         responseResult.setResponseSize(result.getResponseData().length);
         responseResult.setResponseTime(result.getTime());
         responseResult.setResponseMessage(result.getResponseMessage());
-
-        if (JMeterVars.get(result.hashCode()) != null) {
-            List<String> vars = new LinkedList<>();
-            JMeterVars.get(result.hashCode()).entrySet().parallelStream().reduce(vars, (first, second) -> {
-                first.add(second.getKey() + "：" + second.getValue());
-                return first;
-            }, (first, second) -> {
-                if (first == second) {
-                    return first;
-                }
-                first.addAll(second);
-                return first;
-            });
-            responseResult.setVars(StringUtils.join(vars, "\n"));
+        if (JMeterVars.get(result.hashCode()) != null && CollectionUtils.isNotEmpty(JMeterVars.get(result.hashCode()).entrySet())) {
+            StringBuilder builder = new StringBuilder();
+            for (Map.Entry<String, Object> entry : JMeterVars.get(result.hashCode()).entrySet()) {
+                builder.append(entry.getKey()).append("：").append(entry.getValue()).append("\n");
+            }
+            if (StringUtils.isNotEmpty(builder)) {
+                responseResult.setVars(builder.toString());
+            }
             JMeterVars.remove(result.hashCode());
         }
         for (AssertionResult assertionResult : result.getAssertionResults()) {
@@ -305,7 +332,10 @@ public class APIBackendListenerClient extends AbstractBackendListenerClient impl
             if (responseAssertionResult.isPass()) {
                 requestResult.addPassAssertions();
             }
-            responseResult.getAssertions().add(responseAssertionResult);
+            //xpath 提取错误会添加断言错误
+            if (StringUtils.isBlank(responseAssertionResult.getMessage()) || !responseAssertionResult.getMessage().contains("The required item type of the first operand of")) {
+                responseResult.getAssertions().add(responseAssertionResult);
+            }
         }
         responseResult.setConsole(getConsole());
 
@@ -318,7 +348,11 @@ public class APIBackendListenerClient extends AbstractBackendListenerClient impl
         String start = "RPC Protocol: ";
         String end = "://";
         if (StringUtils.contains(body, start)) {
-            return StringUtils.substringBetween(body, start, end).toUpperCase();
+            String protocol = StringUtils.substringBetween(body, start, end);
+            if (StringUtils.isNotEmpty(protocol)) {
+                return protocol.toUpperCase();
+            }
+            return RequestType.DUBBO;
         } else {
             // Http Method
             String method = StringUtils.substringBefore(body, " ");

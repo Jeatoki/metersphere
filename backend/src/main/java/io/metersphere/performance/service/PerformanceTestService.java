@@ -21,7 +21,6 @@ import io.metersphere.i18n.Translator;
 import io.metersphere.job.sechedule.PerformanceTestJob;
 import io.metersphere.performance.engine.Engine;
 import io.metersphere.performance.engine.EngineFactory;
-import io.metersphere.performance.notice.PerformanceNoticeTask;
 import io.metersphere.service.FileService;
 import io.metersphere.service.QuotaService;
 import io.metersphere.service.ScheduleService;
@@ -75,7 +74,7 @@ public class PerformanceTestService {
     @Resource
     private TestCaseService testCaseService;
     @Resource
-    private PerformanceNoticeTask performanceNoticeTask;
+    private TestResourcePoolMapper testResourcePoolMapper;
 
     public List<LoadTestDTO> list(QueryTestPlanRequest request) {
         request.setOrders(ServiceUtils.getDefaultOrder(request.getOrders()));
@@ -127,9 +126,7 @@ public class PerformanceTestService {
         if (files == null) {
             throw new IllegalArgumentException(Translator.get("file_cannot_be_null"));
         }
-
         checkQuota(request, true);
-
         final LoadTestWithBLOBs loadTest = saveLoadTest(request);
         files.forEach(file -> {
             final FileMetadata fileMetadata = fileService.saveFile(file);
@@ -160,6 +157,7 @@ public class PerformanceTestService {
         loadTest.setLoadConfiguration(request.getLoadConfiguration());
         loadTest.setAdvancedConfiguration(request.getAdvancedConfiguration());
         loadTest.setStatus(PerformanceTestStatus.Saved.name());
+        loadTest.setNum(getNextNum(request.getProjectId()));
         loadTestMapper.insert(loadTest);
         return loadTest;
     }
@@ -219,6 +217,14 @@ public class PerformanceTestService {
         if (StringUtils.equalsAny(loadTest.getStatus(), PerformanceTestStatus.Running.name(), PerformanceTestStatus.Starting.name())) {
             MSException.throwException(Translator.get("load_test_is_running"));
         }
+        String testResourcePoolId = loadTest.getTestResourcePoolId();
+        TestResourcePool testResourcePool = testResourcePoolMapper.selectByPrimaryKey(testResourcePoolId);
+        if (testResourcePool == null) {
+            MSException.throwException("Test resource pool not exists.");
+        }
+        if (ResourceStatusEnum.INVALID.name().equals(testResourcePool.getStatus())) {
+            MSException.throwException("Test resource pool invalid.");
+        }
         // check kafka
         checkKafka();
 
@@ -231,10 +237,6 @@ public class PerformanceTestService {
 
         startEngine(loadTest, engine, request.getTriggerMode());
 
-        LoadTestReportWithBLOBs loadTestReport = loadTestReportMapper.selectByPrimaryKey(engine.getReportId());
-        if (StringUtils.equals(NoticeConstants.Mode.API, loadTestReport.getTriggerMode()) || StringUtils.equals(NoticeConstants.Mode.SCHEDULE, loadTestReport.getTriggerMode())) {
-            performanceNoticeTask.registerNoticeTask(loadTestReport);
-        }
         return engine.getReportId();
     }
 
@@ -388,6 +390,7 @@ public class PerformanceTestService {
         copy.setUpdateTime(System.currentTimeMillis());
         copy.setStatus(APITestStatus.Saved.name());
         copy.setUserId(Objects.requireNonNull(SessionUtils.getUser()).getId());
+        copy.setNum(getNextNum(copy.getProjectId()));
         loadTestMapper.insert(copy);
         // copy test file
         LoadTestFileExample loadTestFileExample = new LoadTestFileExample();
@@ -479,6 +482,25 @@ public class PerformanceTestService {
         QuotaService quotaService = CommonBeanFactory.getBean(QuotaService.class);
         if (quotaService != null) {
             quotaService.checkLoadTestQuota(request, create);
+        }
+    }
+
+    public List<LoadTest> getLoadTestListByIds(List<String> ids) {
+        if (CollectionUtils.isEmpty(ids)) {
+            return new ArrayList<>();
+        }
+        LoadTestExample loadTestExample = new LoadTestExample();
+        loadTestExample.createCriteria().andIdIn(ids);
+        List<LoadTest> loadTests = loadTestMapper.selectByExample(loadTestExample);
+        return Optional.ofNullable(loadTests).orElse(new ArrayList<>());
+    }
+
+    private int getNextNum(String projectId) {
+        LoadTest loadTest = extLoadTestMapper.getNextNum(projectId);
+        if (loadTest == null) {
+            return 100001;
+        } else {
+            return Optional.of(loadTest.getNum() + 1).orElse(100001);
         }
     }
 }
